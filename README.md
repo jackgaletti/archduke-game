@@ -31,7 +31,7 @@ Opponents retain their cyclic order in the top strip. The pending and shared pil
 
 Use separate browser profiles or isolated Playwright contexts for distinct players. Two normal tabs with the same room cookie control the SAME seat: the newest takes over, and the old tab displays a takeover message. Session cookies are HttpOnly and room-scoped. Never put session credentials into an invitation.
 
-Refresh reconnects to your seat. A confirmed disconnect freezes the round; once everyone returns, the host presses Resume. Grace is 60 seconds, with no automatic strategic moves. Administrative host passes clockwise if needed. Active games lock admissions.
+Refresh reconnects to your seat. A confirmed disconnect freezes the round; once everyone returns, the round resumes automatically after the short restart delay. Grace is 60 seconds, with no automatic strategic moves. Administrative host passes clockwise if needed. Active games lock admissions.
 
 ## Commands
 
@@ -56,7 +56,7 @@ To inspect the built app locally, set `.env` PUBLIC_ORIGIN to `http://localhost:
 
 Default `PERSISTENCE=memory`: a process restart/deploy loses active rooms; old links show **This game is no longer available**. UI displays this mode. Abandoned rooms expire after two hours; finished rooms expire after 30 minutes without connected players. Expiration deletes the snapshot and all credential verifiers.
 
-Optional `PERSISTENCE=sqlite`, `DATA_DIR=./data`: stores full authoritative state and hashed session mapping using Node's SQLite adapter. Every gameplay/reconnect commit is saved before acknowledgement/broadcast. Failure preserves previous committed state. Restart restores active games paused, all connections disconnected, private interactions and acknowledgement records intact. Rejoin and host Resume explicitly restore timers. Database contains hidden game information: keep it private; it is not a static asset.
+Optional `PERSISTENCE=sqlite`, `DATA_DIR=./data`: stores full authoritative state and hashed session mapping using Node's SQLite adapter. Every gameplay/reconnect commit is saved before acknowledgement/broadcast. Failure preserves previous committed state. Restart restores active games paused, all connections disconnected, private interactions and acknowledgement records intact. Timers resume automatically after all seats reconnect. Database contains hidden game information: keep it private; it is not a static asset.
 
 ## Architecture
 

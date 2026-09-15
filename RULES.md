@@ -48,7 +48,7 @@ Each browser independently reviews the leaderboard and clicks Next to continue t
 
 Empty draw supply recycles all discards except the visible top, never grids or a held draw. Optional unavailable draws/Gives are unavailable. A mandatory penalty with no available supply pauses with **No cards available**; host can explicitly redeal this round without placements, retaining prior rounds. The redeal uses the normal starter rule: random in round one, previous round’s last place in later rounds.
 
-Confirmed disconnect pauses an active round and freezes remaining logical durations. The 60-second grace is an indication, not an automatic move or abort. Host can wait or abort to lobby. All seats must reconnect, then host resumes with a two-second countdown. If host disconnects, administrative control moves to the next connected seat. A second tab takes over a seat without making another player.
+Confirmed disconnect pauses an active round and freezes remaining logical durations. The 60-second grace does not make an automatic move or abort. Once all seats reconnect, the server resumes automatically after a two-second countdown. If host disconnects, administrative control moves to the next connected seat. A second tab takes over a seat without making another player.
 
 ## Deliberate differences from the PDF
 

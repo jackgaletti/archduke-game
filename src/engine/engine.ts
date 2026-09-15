@@ -37,6 +37,7 @@ function autoSkip(s:State){
  }
 }
 function windowOpen(s:State,d:Dependencies){s.window=ident(s);s.open=true;s.phase=s.caller&&!s.finalTurns.length?'FINAL_MATCH_WINDOW':'INTER_TURN';s.unlockAt=Math.max(s.visualUntil,d.now())+d.delay;}
+function matchingOpen(s:State){return s.open||(s.effects.length>0&&['INTER_TURN','FINAL_MATCH_WINDOW'].includes(s.phase));}
 export function startRound(s:State,d:Dependencies,redeal=false){
  const starter=(redeal?s.round===1:s.round===0)?s.players[d.randomInt(s.players.length)].id:s.history.at(-1)!.at(-1)!.player;
  if(!redeal)s.round++;
@@ -94,8 +95,12 @@ export function connection(s:State,d:Dependencies,id:string,connected:boolean){
  const p=player(s,id);p.connected=connected;
  if(connected&&!player(s,s.host).connected){const index=s.players.findIndex(p=>p.id===s.host);for(let i=1;i<=s.players.length;i++){const candidate=s.players[(index+i)%s.players.length];if(candidate.connected){s.host=candidate.id;break;}}}
  if(!connected){if(active(s))pause(s,d,`${p.name} disconnected`);if(s.host===id){const index=s.players.indexOf(p);for(let i=1;i<=s.players.length;i++){const next=s.players[(index+i)%s.players.length];if(next.connected){s.host=next.id;break;}}}}
+ if(connected&&s.paused&&s.paused.reason!=='No cards available'&&s.players.every(p=>p.connected))resumeRound(s,d);
  if(connected)maybeBeginReadyRound(s,d);
  s.seq++;
+}
+function resumeRound(s:State,d:Dependencies){
+ const paused=s.paused!;const shift=d.now()-paused.since+d.restart;s.visualUntil+=shift;s.unlockAt+=shift;if(s.initialPeek){s.initialPeek.revealAt+=shift;s.initialPeek.hideAt+=shift;s.initialPeek.finishAt+=shift;}if(s.finalEndsAt!==undefined)s.finalEndsAt+=shift;for(const e of s.effects)if(e.viewUntil!==undefined)e.viewUntil+=shift;for(const r of s.reveals)r.until+=shift;for(const m of s.movements){m.start+=shift;m.end+=shift;}s.restartAt=d.now()+d.restart;s.paused=undefined;log(s,'Everyone is back. Resuming automatically.');
 }
 function finalDeadline(s:State,d:Dependencies){
  if(s.phase!=='FINAL_MATCH_WINDOW'){s.finalEndsAt=undefined;return;}
@@ -127,7 +132,7 @@ export function apply(s:State,d:Dependencies,actor:string,c:Command):Reply{
  const host=()=>need(s.host===actor,'Only the host can do that.');
  const settled=()=>need(!s.effects.length&&d.now()>=s.visualUntil,'Wait for the card effects and movement.','WAIT');
  if(c.type==='abort'){host();s.phase='LOBBY';s.betweenRounds=false;s.finalEndsAt=undefined;s.round=0;s.game++;s.history=[];s.deck=deck();s.discard=[];s.held=undefined;s.effects=[];s.paused=undefined;s.open=false;s.movements=[];s.reveals=[];s.winners=[];s.caller=undefined;s.lastTurn=undefined;s.finalTurns=[];s.ending=false;s.incorrectApplied=false;s.next='';s.turn=0;s.window='';s.visualUntil=d.now();s.unlockAt=d.now();s.restartAt=0;for(const q of s.players){q.slots=[];q.ready=false;q.reviewingResults=false;q.viewingLeaderboard=false;q.initial=undefined;q.initialOpen=[];q.hidden=false;}log(s,'Game returned to lobby.');}
- else if(c.type==='resume'){host();need(s.paused,'Game is not paused.');need(s.paused.reason!=='No cards available','Redeal this round to restore the card supply.');need(s.players.every(p=>p.connected),'Wait for all players to reconnect.');const shift=d.now()-s.paused.since+d.restart;s.visualUntil+=shift;s.unlockAt+=shift;if(s.initialPeek){s.initialPeek.revealAt+=shift;s.initialPeek.hideAt+=shift;s.initialPeek.finishAt+=shift;}if(s.finalEndsAt!==undefined)s.finalEndsAt+=shift;for(const e of s.effects)if(e.viewUntil!==undefined)e.viewUntil+=shift;for(const r of s.reveals)r.until+=shift;for(const m of s.movements){m.start+=shift;m.end+=shift;}s.restartAt=d.now()+d.restart;s.paused=undefined;log(s,'Everyone is back. Resuming after the countdown.');}
+ else if(c.type==='resume'){host();need(s.paused,'Game is not paused.');need(s.paused.reason!=='No cards available','Redeal this round to restore the card supply.');need(s.players.every(p=>p.connected),'Wait for all players to reconnect.');resumeRound(s,d);}
  else if(c.type==='redeal'){host();need(s.paused?.reason==='No cards available','Redeal is only available when the card supply is exhausted.');need(s.players.every(p=>p.connected),'All players must be connected.');startRound(s,d,true);}
  else {
   need(!(s.phase==='FINAL_MATCH_WINDOW'&&s.finalEndsAt!==undefined&&d.now()>=s.finalEndsAt&&c.type!=='finish'),'The final matching window has closed.','STALE');need(!s.paused,'Room is paused.','PAUSED');need(d.now()>=s.restartAt,'Restart countdown is running.','WAIT');
@@ -140,7 +145,7 @@ export function apply(s:State,d:Dependencies,actor:string,c:Command):Reply{
    case 'resolveDraw':need(s.phase==='HOLDING_DRAWN_CARD'&&s.held?.owner===actor,'You are not holding a drawn card.');need(c.turn===s.turn,'Turn changed.','STALE');need(d.now()>=s.visualUntil,'Wait for the draw movement.','WAIT');{const held=s.held;const at=Math.max(d.now(),s.visualUntil);let outgoing=held.card;let from=`held:${actor}`;if(c.target){need(c.target.player===actor,'Replace only your own occupied slot.');const v=slot(s,c.target);outgoing=v.card!;v.card=held.card;v.rev++;from=endpoint(actor,c.target.slot);movement(s,d,'replace',`held:${actor}`,from,held.card.value,held.source==='draw'?actor:undefined,at);effect(s,actor,outgoing.value);}else need(held.source==='draw','A discard-pile card must replace a grid card.');s.discard.push(outgoing);const underlying=s.discard.at(-2)?.value;s.held=undefined;movement(s,d,'discard',from,'discard',outgoing.value,undefined,at,underlying);s.lastTurn=actor;s.turn++;if(s.caller){need(s.finalTurns[0]===actor,'Final turn order corrupted.','INTERNAL');s.finalTurns.shift();s.next=s.finalTurns[0]??s.caller;}else s.next=s.players[(s.players.indexOf(p)+1)%s.players.length].id;windowOpen(s,d);autoSkip(s);}break;
    case 'match':{
     need(active(s)&&s.phase!=='INITIAL_PEEK'&&!s.ending,'Matching is unavailable.');need(c.window===s.window,'This matching window is obsolete.','STALE');need(c.slots.length>0&&new Set(c.slots.map(t=>`${t.player}:${t.slot}`)).size===c.slots.length,'Select distinct cards.');need(c.slots.every(t=>t.player===actor),'Only match your own cards.');c.slots.forEach(t=>slot(s,t));const results:string[]=[];
-    if(!s.open){need(s.phase==='HOLDING_DRAWN_CARD','Matching window closed.','STALE');for(const _t of c.slots){void _t;penalty(s,d,p);results.push('late');if(s.paused)break;}}
+    if(!matchingOpen(s)){need(s.phase==='HOLDING_DRAWN_CARD','Matching window closed.','STALE');for(const _t of c.slots){void _t;penalty(s,d,p);results.push('late');if(s.paused)break;}}
     else{need(s.discard.length,'No discard available.');for(const t of c.slots){const v=slot(s,t);if(matches(v.card!.value,s.discard.at(-1)!.value)){normalizeRows(p);const card=v.card!;v.card=undefined;v.rev++;closeRow(p,v.row!);s.discard.push(card);movement(s,d,'match',endpoint(actor,t.slot),'discard',card.value,undefined,undefined,s.discard.at(-2)?.value);results.push('matched');if(!occupied(p)){endRound(s,d);break;}effect(s,actor,card.value);}else {s.reveals.push({target:t,value:v.card!.value,until:Math.max(d.now(),s.visualUntil)+d.motion+800});movement(s,d,'wrong-match',endpoint(actor,t.slot),endpoint(actor,t.slot),v.card!.value);penalty(s,d,p);s.visualUntil=Math.max(s.visualUntil,...s.reveals.map(r=>r.until));s.unlockAt=Math.max(s.unlockAt,s.visualUntil+d.delay);results.push('wrong');if(s.paused)break;}}autoSkip(s);}
     finalDeadline(s,d);s.seq++;return {ok:true,code:results.includes('late')?'LATE':results.includes('wrong')?'PENALTY':'OK',message:results.join(', '),seq:s.seq,results};}
    case 'effect':{
@@ -166,7 +171,7 @@ export function project(s:State,d:Dependencies,you:string,persistence:'memory'|'
  else if(s.reveals.some(r=>r.target.player===p.id&&r.target.slot===index&&r.target.rev===v.rev&&r.until>now))value=v.card.value;
  else {const e=s.effects[0];if(e?.actor===you&&e.viewUntil!==undefined&&e.viewUntil>now&&e.target?.player===p.id&&e.target.slot===index&&e.target.rev===v.rev)value=e.value;}}
  return {index,rev:v.rev,row:v.row??index%2,column:v.column??Math.floor(index/2),occupied:!!v.card,...(value===undefined?{}:{value})};})})),
- next:s.next,turn:s.turn,window:s.window,open:s.open,unlockAt:s.unlockAt,visualUntil:s.visualUntil,restartAt:s.restartAt,finalEndsAt:s.finalEndsAt,betweenRounds:s.betweenRounds,
+ next:s.next,turn:s.turn,window:s.window,open:matchingOpen(s),unlockAt:s.unlockAt,visualUntil:s.visualUntil,restartAt:s.restartAt,finalEndsAt:s.finalEndsAt,betweenRounds:s.betweenRounds,
  drawCount:s.deck.length,discardCount:s.discard.length,discard:s.discard.at(-1)?.value,
  held:s.held?{id:s.held.id,owner:s.held.owner,source:s.held.source,...((s.held.owner===you||s.held.source==='discard')?{value:s.held.card.value}:{})}:undefined,
  effects:s.effects.map(e=>({id:e.id,actor:e.actor,kind:e.kind,viewUntil:e.viewUntil,target:e.target})),caller:s.caller,finalTurns:s.finalTurns,

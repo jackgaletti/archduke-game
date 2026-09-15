@@ -1,6 +1,6 @@
 # Archduke
 
-A private, synchronous 2–10-player card game: React/TypeScript/Vite, Express/Socket.IO, one authoritative Node process, four rounds. Uses the supplied card artwork and the confirmed [house rules](RULES.md).
+A private, synchronous 2–6-player card game: React/TypeScript/Vite, Express/Socket.IO, one authoritative Node process, four rounds. Uses the supplied card artwork and the confirmed [house rules](RULES.md).
 
 ## Run locally
 
@@ -9,11 +9,11 @@ nvm install
 nvm use
 npm ci
 cp .env.example .env
-# Edit .env: choose a HOST_SECRET of at least 8 characters.
+# .env defaults work for local development.
 npm run dev
 ```
 
-Open **http://localhost:5173**. Create a table with a display name and the configured host passphrase. Share its invitation. Joiners need only their name and invitation/code. Set PUBLIC_ORIGIN to exactly the origin browsers use (no trailing slash).
+Open **http://localhost:5173**. Enter a display name and click **Start game** to create a room immediately as its host. In the room, use **Invite**. Friends open it directly into a branded name-only **Join game** screen. Returning players reconnect to their existing seat without another name prompt. On the landing page, **Join game** reveals an invitation/code input and reuses the entered name. Set PUBLIC_ORIGIN to exactly the origin browsers use (no trailing slash).
 
 Pinned runtime: Node **24.18.1**, an installed Node 24 LTS version. Node 20.15.1 is too old for this Vite build. Node LTS status: [official release schedule](https://nodejs.org/en/about/previous-releases). Build requirements: [Vite guide](https://vite.dev/guide/).
 
@@ -23,9 +23,13 @@ On this workstation, if nvm is unavailable:
 export PATH="/Users/jackgaletti/.local/share/dating-app-backend/runtime/node-v24.18.1-darwin-arm64/bin:$PATH"
 ```
 
+## Table interface
+
+Opponents retain their cyclic order in the top strip. The pending and shared piles use larger 5:7 cards below. Expanded own hands use a reserved 30% wider footprint; Cards opens a safe slot inspector. A gold triangle identifies the next player; a gold name and the supplied crown identify the caller. See [TABLE_INTERFACE.md](TABLE_INTERFACE.md).
+
 ## Independent players and reconnect
 
-Use separate browser profiles or isolated Playwright contexts for distinct players. Two normal tabs with the same room cookie control the SAME seat: the newest takes over, and the old tab displays a takeover message. Session cookies are HttpOnly and room-scoped. Never put session credentials or HOST_SECRET into an invitation.
+Use separate browser profiles or isolated Playwright contexts for distinct players. Two normal tabs with the same room cookie control the SAME seat: the newest takes over, and the old tab displays a takeover message. Session cookies are HttpOnly and room-scoped. Never put session credentials into an invitation.
 
 Refresh reconnects to your seat. A confirmed disconnect freezes the round; once everyone returns, the host presses Resume. Grace is 60 seconds, with no automatic strategic moves. Administrative host passes clockwise if needed. Active games lock admissions.
 
@@ -66,11 +70,18 @@ Card files in `assets/source-cards` remain unchanged. `public/cards` contains we
 
 ## Troubleshooting
 
-- Missing HOST_SECRET: edit `.env` locally or Render's environment settings; never commit a secret.
 - Cannot connect: use the exact PUBLIC_ORIGIN, enable WebSockets, and check the server is running. Production serves frontend and sockets from one origin.
-- Stale/late action: stale slot/window commands resynchronize without penalty; an actual match ordered after the next draw can receive that window's one penalty.
+- Stale/late action: stale slot/window commands resynchronize without penalty; each distinct card attempted after the next draw receives its own unknown penalty card.
 - Reconnecting forever: room loss is terminal and should show a readable error; return home and create/join a new room.
 - No cards available: host may redeal only this round; prior placements survive.
 - Do not run multiple production instances: memory state and SQLite snapshots are designed for one authority.
 
 See [deployment instructions](DEPLOYMENT.md) and [actual verification status](IMPLEMENTATION_STATUS.md). Deploy-ready and externally hosted are separate states.
+
+### Landing assets
+
+The landing uses the original 21-frame `public/graphics/graphic_1.gif` at a restrained size. Reduced-motion users see its first frame instead. Dela Gothic One is bundled locally in `public/fonts`, with the approved logo subset and the complete regular face for game controls and names, with its SIL Open Font License; no runtime font service or Downloads path is needed.
+
+## Minimal table and direct cards
+
+See [current table behavior](TABLE_INTERFACE.md) for the player-relative 2–6-seat layouts, automatic initial peeking, direct special peeking/drawing/replacement, invitation feedback, and motion/privacy rules. Each viewer is alone at the bottom. Existing oversized saved rooms retain their state and show an explicit incompatibility message; create a new six-player room to play.

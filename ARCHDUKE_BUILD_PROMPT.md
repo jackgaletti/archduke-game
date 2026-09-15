@@ -1,6 +1,6 @@
 # Build Archduke: complete private multiplayer card game
 
-You are implementing this project, not merely planning it. Read this entire file before changing code. Build, run, test, inspect, and repair the complete application until the definition of done below is met. The target is a polished browser game that 2–10 friends can play synchronously through private invite links, with four rounds per game. Finish all locally possible work even when account setup or deployment credentials remain unavailable.
+You are implementing this project, not merely planning it. Read this entire file before changing code. Build, run, test, inspect, and repair the complete application until the definition of done below is met. The target is a polished browser game that 2–6 friends can play synchronously through private invite links, with four rounds per game. Finish all locally possible work even when account setup or deployment credentials remain unavailable.
 
 ## 1. Working agreement and inputs
 
@@ -34,7 +34,7 @@ Use one repository and one production Node process:
 
 The following differences from the PDF are intentional:
 
-1. Support 2–10 players, even though the printed game says 2–6.
+1. Support 2–6 players. Reject a seventh new player; retain reconnects at capacity.
 2. Four rounds per game. Round 1 starts with a randomly selected player. Each later round starts with the previous round's last-place player. Rotation is clockwise in stable lobby seating order.
 3. A player reaching zero grid cards immediately ends the CURRENT ROUND, not the entire four-round game. This was explicitly clarified by the user. Do not give them an automatic first-place finish: negative hand sums can beat zero.
 4. `0` and `13` match each other in either direction. They keep their own numerical scoring values.
@@ -42,14 +42,14 @@ The following differences from the PDF are intentional:
 6. An Archduke caller whose hand sum is higher than another player's at round end receives one extra draw-pile card before placements are assigned. The user explicitly confirmed this penalty. Determine whether it applies from the sums BEFORE adding the penalty. Tying for the minimum sum incurs no incorrect-call penalty. Apply it exactly once, then score all hands including the added card. It can have any deck value, including a negative value, and does not trigger an action.
 7. The caller may keep matching after calling Archduke and remains immune to ALL special-card effects, including attempts involving their cards. They are still subject to ordinary matching penalties and the incorrect-call penalty.
 8. Before the next player can draw, enforce at least a one-second server-controlled opportunity to match and call Archduke after the preceding discard/effects become visually complete. The PDF's immediate pile-touch shortcut does not bypass this delay.
-9. Multiple failed matches by one player during the same matching opportunity yield at most one unknown penalty card. The grouping default is specified below; do not charge one card for every click.
+9. Each distinct incorrectly or too-late attempted card incurs one unknown draw-pile penalty card. Technical retries are deduplicated by action ID; duplicate slot references and stale/unauthorized/malformed commands incur no penalties.
 
 Explicit implementation defaults for details the user has not separately settled:
 
-- One matching opportunity means one `matchWindowId` opened by a normal turn discard or the initial discard. Successful matches do not create a new window. A player gets at most one failed-match penalty for that window, including a late attempt racing with the next accepted draw. A new normal discard starts a fresh window and penalty allowance.
+- A matching window opens at a normal turn discard or initial discard. Successful matches retain the window. Each distinct wrong/late card incurs its own penalty, including new intentional attempts of previously failed cards.
 - A player may call Archduke after either kind of completed legal turn: replacing a grid card OR immediately discarding a card drawn from the draw pile. They cannot call just because they matched outside their own turn.
 - Special actions are optional: an actor can explicitly Skip. If there is no legal target, auto-skip with a public explanation. A swap targets occupied slots in TWO DIFFERENT players' grids, consistent with the user's wording.
-- After the final scheduled turn, keep matching open until the Archduke caller presses a dedicated `Finish round` button. This implements page 6's final pile-tap rule. Enable it only after the minimum delay and all special actions/animations resolve. It must not accidentally draw a card.
+- After the final scheduled turn and its effects/movement, run a server-authoritative three-second final matching countdown and finish automatically. New required effects suspend/restart the countdown; ordinary matches and invalid attempts do not extend it. No Finish button.
 - Incorrect on-time matching visibly reveals the attempted card(s), then returns them to their original slots face down. A too-late attempt leaves the attempted card(s) face down and in place; it does not grant an extra peek.
 - Use the PDF's round tie-breakers and shared final-game victory as specified below.
 - Do not impose an ordinary per-turn countdown; the user supplied a between-turn delay, not a turn time limit.
@@ -71,12 +71,12 @@ There are exactly 104 physical cards:
 
 - Give physical cards unique server-only identities. Shuffle the entire deck independently at the beginning of each round using Fisher–Yates with an unbiased cryptographic integer source, e.g. Node `crypto.randomInt`. Do not use random-comparator sorting.
 - Deal four cards face down to each player in a 2×2 grid. Keep all remaining cards in the central draw pile.
-- During initial peeking, each player chooses exactly two distinct own occupied slots, gets one opportunity to see those faces privately, then explicitly hides them and marks ready. All players must finish before the initial discard is revealed. Reconnecting must not allow choosing additional slots or restarting a completed peek.
+- After dealing each round, automatically flip each player’s own bottom two cards, hold them fully face up for three seconds, then close them before the initial discard. Server deadlines and pause policy apply; reconnect never restarts the sequence. Other recipients never receive private faces. No initial-peek controls or countdown.
 - The server keeps all hidden values, deck order, drawn cards, and permissions. A client's initial/reconnect snapshot must not include their whole hand's values, opponents' values, or future draws. Never send hidden values and merely hide them with CSS.
 - Previously seen cards return to ordinary card backs. Do not create a persistent known-card overlay, hover reveal, public peek history, automatic memory notes, or a live hand-sum display before scoring. Forgetting is part of the game. Purge expired private face data from normal client state and logs as practical, while recognizing a recipient can manually record information they were legitimately shown.
 - A legitimate private peek or drawn-card face goes only to the authorized player connection/session. Reconnect restores a still-active private interaction without granting new knowledge after its permitted visibility has ended.
 - Use stable public slot references and occupancy revisions. Do not expose value-encoded IDs or preserve publicly trackable card identities across a hidden reshuffle. Reassign opaque references as needed at hidden-zone transitions.
-- Keep remaining cards in their exact grid locations when a card is matched away; leave a hole. Never compact, sort, or rearrange a grid automatically. Replacements occupy exactly the chosen occupied slot. Swaps exchange occupants of exactly two selected slots.
+- Matching removes the card and slides only cards to its right in that row leftward, preserving relative order and stable target identities. Add penalty/Give cards to the shorter row, top on ties, reevaluating each addition. Replacements occupy exactly the chosen occupied slot. Swaps exchange occupants of exactly two selected slots.
 - Add penalty/given cards to visible, stable new positions to the right, adding columns to the two-row layout. Do not silently refill a matched hole or move other cards. Support zero to more than four cards, limited only by the physical deck, not an arbitrary UI cap.
 - Show every player's face-down grid on the table throughout play. A player's grid orientation and slot ordering remain consistent even when their seat is displayed from another viewer's perspective. Animate to the correct slot using canonical slot coordinates.
 
@@ -98,11 +98,11 @@ Matching is real-time competitive input. Correctness at the boundary between a m
 - Match equivalence is numerical equality, plus the single equivalence class `{0, 13}`. No other symbol matching exists.
 - Any player can match their own occupied grid cards onto the visible discard during the open matching window, including the player who just discarded and the Archduke caller. No one matches a card out of another player's grid.
 - A successful match removes that card from its slot and places it face up on the discard pile. Do not replace it. Multiple people can match, and a player can match multiple cards. Each physical matched special card earns one effect if the round has not ended.
-- Support immediate single-card clicks for speed and an explicit multi-card selection/submit option for accessibility. A multi-card command has one action ID and ordered distinct slot selections. Reject malformed or duplicate slot selections without creating gameplay penalties. Valid cards in a mixed batch may match; invalid ones remain. Charge at most one failed-match penalty for the player's window.
-- For rapid independent clicks, do not debounce away or batch-delay valid matches. Apply the one-penalty-per-player-per-window rule server-side.
+- Support immediate single-card clicks for speed and an explicit multi-card selection/submit option for accessibility. A multi-card command has one action ID and ordered distinct slot selections. Reject malformed or duplicate slot selections without creating gameplay penalties. Valid cards in a mixed batch may match; invalid ones remain. Charge one penalty per distinct wrong card.
+- For rapid independent clicks, do not debounce away or batch-delay valid matches. Apply per-card penalties server-side.
 - Validate all requested slots against their referenced occupant revision. If a slot changed because of an earlier swap/match, reject the stale command without punishing the player or revealing the replacement occupant. Do not use a single strict global-state-version equality check that rejects every competing match after the first update.
-- For an on-time wrong value, retain the attempted card(s), visibly show the error, and add one unknown draw-pile penalty card unless that player was already penalized in this window. Incorrect matching cannot activate a special action or replace the discard top.
-- If a match against the just-closed window reaches the authoritative action order AFTER the next valid draw but BEFORE that turn's new discard opens another window, it is a late match: retain its card(s) and apply the same one-penalty rule. A claimed client timestamp cannot reverse this result.
+- For an on-time wrong value, retain the attempted card(s), visibly show the error, and add one unknown draw-pile penalty card per distinct incorrect card. Incorrect matching cannot activate a special action or replace the discard top.
+- If a match against the just-closed window reaches the authoritative action order AFTER the next valid draw but BEFORE that turn's new discard opens another window, it is a late match: retain its card(s) and apply the same per-card penalty rule. A claimed client timestamp cannot reverse this result.
 - Messages from older rounds/windows, duplicated action IDs, malformed commands, paused-room clicks, and attempts referring to changed slots are rejected/resynchronized, not treated as fresh matching penalties. Offline clients must not buffer speculative gameplay actions for replay when they reconnect. An action actually sent but with an unknown acknowledgement is resolved through its ID/status.
 - Match and draw commands share one room queue. If a match commits first, it succeeds or fails by the current value; if the draw commits first, the match is late. Two actors can never both take the same physical card.
 - Do not trigger private unknown penalty/give-card faces in animations, aria labels, HTML attributes, errors, or network payloads.
@@ -124,7 +124,7 @@ Special actions activate only when the card leaves a grid through replacement or
 - No normal next draw is accepted while an effect or mandatory movement/private-view phase remains unresolved. No Archduke call is accepted while any such effect is unresolved.
 - Effects do not draw-and-discard into the central pile and do not recursively trigger card-value actions. A given card's number is irrelevant until later legally revealed/played.
 - The Archduke caller is never a legal Give recipient, neither of their slots may participate in Swap, and none of their cards may be Peek targets. Enforce this on the server even if a stale UI offers the target.
-- Peek has a brief private reveal with a configurable default of 3 seconds and an early `Done` action. Its server-controlled ending permits the queue to advance. Other viewers see which slot was inspected but not its face. Keep the card in its original position afterward.
+- Peek has a brief private reveal with a configurable default of 3 seconds and an early second-click close action. Its server-controlled ending permits the queue to advance. Other viewers see which slot was inspected but not its face. Keep the card in its original position afterward.
 - Target selection has an explicit Skip, but do not add an arbitrary ordinary-turn time limit. Disconnect handling below prevents an abandoned interaction from silently mutating the game.
 
 ## 8. Timing, animations, and turn eligibility
@@ -133,7 +133,7 @@ Model logical eligibility separately from animation rendering. Prefer explicit p
 
 - Every accepted gameplay event carries a monotonically increasing sequence, room/game/round IDs, server time, and necessary public movement endpoints. Private payloads are separately projected per recipient.
 - Use an injected monotonic server clock for live deadlines. Estimate server time offset and RTT on clients; countdowns use authoritative timestamps, not independent `setInterval` countdown state. Refresh the estimate periodically and after reconnect/foregrounding.
-- Default `MATCH_DELAY_MS=1000`. The next draw unlocks no earlier than one second after the normal discard's reveal/movement finishes, and no earlier than one second after the latest mandatory queued effect/animation finishes. Pending effects always block draws. A normal match does not create a new logical matching window or new penalty allowance, although its movement/effect completion can extend the unlock time.
+- Default `MATCH_DELAY_MS=1000`. The next draw unlocks no earlier than one second after the normal discard's reveal/movement finishes, and no earlier than one second after the latest mandatory queued effect/animation finishes. Pending effects always block draws. A normal match does not create a new logical matching window , although its movement/effect completion can extend the unlock time.
 - Once that minimum expires, matching remains open until the next accepted draw; it is not a fixed one-second-only matching window.
 - Calling Archduke is allowed as soon as the previous turn owner's discard and all pending actions/required animations are complete, and before the next accepted draw. It need not wait until the next player's draw unlocks. Competing calls/draws are decided by the same server order.
 - Preload artwork before readying a player. Use brief, readable draw, private flip, discard, replacement, match, penalty/give, swap, peek, shuffle/recycle, and round-reveal animations. Give/swap movements must make exact destination slots trackable by all viewers.
@@ -150,7 +150,7 @@ Model logical eligibility separately from animation rendering. Prefer explicit p
 - Only the player who just completed the normal turn can call, only after all queued effects resolve, only before the next accepted draw, and only if no one has already called this round.
 - After a valid call, record that caller and an explicit ordered list of every other player, starting with the next clockwise player. Each gets exactly ONE additional normal turn. Matching and effects do not consume these turns or add extra turns.
 - The caller's immunity begins atomically when the call is accepted. Their own out-of-turn matches remain legal. No caller bonus or immunity to matching penalties is implied.
-- After the final scheduled turn, resolve its effects and permit the final matching window described above. The caller's `Finish round` action replaces the physical pile tap. It cannot close early during effects or the mandatory minimum delay. Any successful match to zero ends the round immediately without waiting for this button.
+- After the final scheduled turn, resolve its effects and permit the final matching window described above. The server automatically closes after three seconds, once required effects resolve; ordinary matches and invalid attempts never extend the final deadline. A successful match to zero still ends the round immediately.
 - Any player reaching zero at any earlier point also ends the round immediately, whether or not Archduke has been called. The triggering player need not be the caller or turn owner.
 
 ### Scoring
@@ -161,7 +161,7 @@ Model logical eligibility separately from animation rendering. Prefer explicit p
 4. Rank by lowest sum. For equal sums, fewer cards wins. If still equal, compare the lowest single card in each tied hand. If still tied, draw tie-break cards as the PDF directs, lowest wins; repeat among any still-tied players. Tie-break cards are not added to hands, never affect sums, and activate no effects. Show how the tie was resolved. Manage these cards in a temporary scoring zone so the 104-card conservation invariant still holds.
 5. Use available central cards for tie-break draws, recycling as appropriate. Return temporary tie-break cards between tie-break passes. If an extreme exhausted state cannot supply enough tie-break cards, use a server-randomized tie order and label this narrowly scoped digital fallback; do not manufacture gameplay cards.
 6. Award unique ordinal placements 1 through player count and retain each player's placement for that round. Reveal scores can remain for the current results view; don't retain old hands as a gameplay memory aid in later rounds.
-7. Show a dismissible result popup containing exactly `[player name] got dead last!`, plus a readable full leaderboard. Each browser dismisses its own popup; dismissal does not start the next round independently.
+7. Show a readable labeled leaderboard with Next. Automatically show `[player name] got dead last!` once in a contrasting noninteractive banner for approximately 2–3 seconds. It never advances play or blocks Next.
 8. After results, host starts the next round when players are ready. Reshuffle all 104 cards, reset all round-only state and penalties/immunity, deal, and repeat peeking. Previous last place starts. After round 4, sum each player's FOUR PLACEMENTS; lowest total wins. Do not total numerical hand sums across rounds. A tie in placement totals is a shared game victory, per the PDF.
 9. Allow a fresh four-round game with the same lobby. Clear the previous game's results and deal state. Do not create public history or persistent profiles.
 
@@ -173,12 +173,12 @@ Model logical eligibility separately from animation rendering. Prefer explicit p
 
 ## 10. Rooms, identity, privacy, reconnection
 
-- Home: Create game and Join game. Creating a room requires a simple shared host passphrase configured as `HOST_SECRET`; friends joining an invited room need only a display name and the invite capability. Do not embed HOST_SECRET in client bundles or URLs.
-- Generate a high-entropy invitation token/link and a reasonably readable random room code. Rate-limit code lookups/join attempts. No public list of rooms. Links/codes expire with the room; enforce max 10 players server-side. A link grants invited access, not host authority.
+- Home (updated by September 14 entry-flow instructions): enter a name, then Start game immediately creates a room with server-issued host privileges. Join game reveals an invite-link/code input. Invite links open the room with a branded name-only entry screen; existing authenticated seats reconnect directly. No shared credential is required.
+- Generate a high-entropy invitation token/link and a reasonably readable random room code. Rate-limit code lookups/join attempts. No public list of rooms. Links/codes expire with the room; enforce max 6 players server-side. A link grants invited access, not host authority.
 - The page itself can be internet-reachable while rooms are private. Implement actual server-side invitation/session checks; do not confuse an unlisted URL with enforced room access. All gameplay snapshots, sockets, and private assets that are gated must obey the intended access model.
 - Give every seated player a separate unguessable reconnect credential, scoped to room/game session as appropriate. A display name or socket ID is not authentication. Credentials should persist through refresh in a secure same-origin mechanism; do not put them in share links or logs. Explain how to test independent seats with isolated browser contexts.
 - Only one controlling connection per seat. A second tab authenticated to that seat either takes over cleanly or is read-only with a clear message; it must not create another player or duplicate a turn. Credential replay from an unauthorized room fails.
-- Lobby has names, readiness, stable seats, copy invite/code, host start, and a 2–10 player count. Lock new admissions during an active game. Existing players may reconnect. No host removal of a player mid-round that silently changes turn order/rankings.
+- Lobby has names, readiness, stable seats, one-click Invite, host start, and a 2–6 player count. Lock new admissions during an active game. Existing players may reconnect. No host removal of a player mid-round that silently changes turn order/rankings.
 - On refresh or brief reconnect, recover the same seat and send a fresh recipient-filtered snapshot, current sequence, deadlines, pending interaction, and acknowledged-action status. Never blindly replay stale private peeks or old client actions.
 - When a seated player is confirmed disconnected, pause the active round and freeze remaining logical durations. Show the disconnected player and a reconnect grace indication. Default grace is 60 seconds; expiry does not automatically play their turn. The host can wait or explicitly abort the current game back to the lobby. Avoid inventing strategic automatic moves.
 - Resume only when required players are connected and the host resumes; publish new consistent timestamps and a short restart countdown before accepting competitive inputs. A slow connected client alone should not continuously stall the game with acknowledgement barriers.
@@ -189,26 +189,19 @@ Model logical eligibility separately from animation rendering. Prefer explicit p
 
 ## 11. Protocol and invariants
 
-Use runtime-validated discriminated commands. Suggested commands include create/join/ready, initial peek/hide, draw(source), resolveDraw(discard|replace), match(slots), resolveEffect(targets|skip), callArchduke, finishRound, nextRound, pause/resume, and returnToLobby. Adapt names, not semantics.
+Use runtime-validated discriminated commands. Suggested commands include create/join/ready, draw(source), resolveDraw(discard|replace), match(slots), resolveEffect(targets|skip), callArchduke, nextRound, pause/resume, and returnToLobby. Adapt names, not semantics.
 
 - Every mutation has an action ID and scoped game/round/turn/window/effect references as appropriate. Actor identity comes from the authenticated connection. Never trust a submitted player ID, card value, claimed deadline, hand sum, or placement.
 - Use recipient projections for both snapshots AND events. A sanitized snapshot is insufficient if a movement event, reconnect replay, debug route, error, DOM attribute, or accessibility string leaks secrets.
 - Reliable delivery requires acknowledgements, deduplication, and current-state resynchronization. Socket.IO alone does not provide application-level exactly-once effects. Deduplication survives reconnect and, in snapshot mode, restart.
 - Error responses distinguish illegal actions, stale state, not-yet-eligible draws, and actual rule penalties. Rate-limit abusive messages without dropping legitimate rapid matching.
-- Invariants: exactly 104 unique physical cards across all current zones; no duplicate ownership; at most one held drawn card; stable seat/slot identities; only the correct next player draws; one FIFO effect head; no hidden-value leakage; one round result; one incorrect-call penalty; one failed-match penalty per player/window; exactly one final normal turn for each non-caller unless zero-card termination occurs first; immutable completed-round placements.
+- Invariants: exactly 104 unique physical cards across all current zones; no duplicate ownership; at most one held drawn card; stable seat/slot identities; only the correct next player draws; one FIFO effect head; no hidden-value leakage; one round result; one incorrect-call penalty; one failed-match penalty per distinct card attempt; exactly one final normal turn for each non-caller unless zero-card termination occurs first; immutable completed-round placements.
 - Public state versions advance consistently. Clients missing versions recover a current snapshot. Do not replay obsolete animations at full speed when a newer state is already authoritative.
 - Include payload-size limits, display-name length limits/escaping, server-side access checks, allowed origins, secure production cookies where used, TLS-compatible WebSockets, heartbeat/reconnect, and no production debug/test endpoints. Keep this proportionate to a private friends' game.
 
 ## 12. UI quality and usability
 
-- Build a complete, attractive game table inspired by the supplied card art: a dark navy tabletop, restrained warm accents, clear typography, and enough contrast for fast actions. Prioritize legible cards and stable positions over decorative panels.
-- At desktop size, all ten seats/grids must be visible and individually targetable. On mobile, provide a responsive table overview with an accessible focused grid when needed; do not hide who has which positions. Verify 2-, 6-, and 10-player layouts and hands with many penalty cards.
-- Display round X/4, clockwise turn/next-player indication, central draw/discard piles with counts, your pending drawn card, match availability, remaining forced delay, whose special action is pending, caller immunity, and final turns remaining.
-- Click a pile to draw when eligible; click an own occupied card to replace when holding a card. During a match window, click an own card to match immediately. Explicit mode/context feedback must prevent accidental ambiguity. A match already submitted remains a match even if the local UI learns the next turn has started while its acknowledgement is in flight.
-- For Swap, use a clear two-target selection with endpoint highlights and cancel-before-submit. For Give, select another player's seat. For Peek, select an eligible occupied card. Illegal immune targets visibly indicate why they are unavailable.
-- Provide obvious Archduke, Skip effect, and final Finish round controls only in the correct contexts. No repeated confirmation modal on ordinary speed actions. Use a readable pending indicator while awaiting authority.
-- Brief public activity text may explain card movements and effects. Never store private peek faces in the activity log or create an automated hand-memory aid.
-- Provide keyboard-accessible controls, adequate touch targets, focus management for dialogs, reduced-motion support, loading/connection/error states, and a concise rules/help overlay describing the actual implemented house rules.
+The current user-approved interface and interaction requirements are in [TABLE_INTERFACE.md](TABLE_INTERFACE.md). They supersede the earlier table styling and selection/reveal-button workflows. Preserve the title/graphic/Name entry flow with the main blue-gray background. Use an ordered opponent strip, a larger hand → pending → draw → discard lower area, larger equal-sized 5:7 central cards and a reserved modest expansion for overlapping own hands. Use the supplied crown gold for separate turn/caller indicators and one cosmetic call burst; no screen border. Retain direct card actions, six seats and server-authoritative eligibility.
 
 ## 13. Verification: prove the game works
 
@@ -216,21 +209,21 @@ Write meaningful tests for rule correctness and multiplayer boundaries. Use Vite
 
 Required coverage:
 
-1. Exact deck multiset, 104-card conservation, Fisher–Yates bounds, four-card dealing for 2 and 10 players, and independent round reset.
+1. Exact deck multiset, 104-card conservation, Fisher–Yates bounds, four-card dealing for 2 and 6 players, and independent round reset.
 2. Initial two-card private peek, no third card, no repeated peek after ready/reconnect, initial discard matching with no effect from the initial card itself.
 3. Draw-pile discard/replace, forced discard-pile replacement, hidden outgoing card revealed only on commitment, only one pending draw.
-4. Correct/wrong/late matching, self-match, multiple players matching, multi-card mixed batches, rapid individual failures sharing one penalty, duplicates not reapplying penalties, fresh windows granting fresh penalty allowance, 0↔13 both directions, stale slot revisions not penalized.
+4. Correct/wrong/late matching, self-match, multiple players matching, multi-card mixed batches, rapid individual failures each receiving a penalty, duplicates not reapplying penalties, new intentional attempts incurring new penalties, 0↔13 both directions, stale slot revisions not penalized.
 5. Both server arrival orders for match-vs-draw and call-vs-draw; delay boundaries immediately before/at/after unlock; early clicks do not auto-execute; competing valid matches are not rejected solely for global version drift.
 6. 1/11/12 triggered only from grids; direct discard does not trigger; one effect per matched special; FIFO chains; matching during queued effects; target moves while selecting; optional skips; no legal targets; immunity for all three actions.
 7. Calling only after one's own resolved turn; caller can match and receive matching penalties; all other players get one final normal turn; final match window and authorized close.
 8. Immediate zero-card termination during a single match, batch, or special chain, with pending effects canceled; zero can lose to a negative sum; incorrect caller gets exactly one card even when someone else ends with zero; tied minimum is not penalized; negative penalty cards are scored correctly.
 9. Round sum → fewest cards → lowest single card → random tie-break hierarchy; tie-break cards don't change sums; last-place popup; next starter; four rounds; placement-total scoring and shared final victory.
-10. Empty draw-pile recycle preserving discard top; Give/penalty recycle; no recycling hands/held draws; explicit depleted-state fallback; large grids and stable empty slots.
+10. Empty draw-pile recycle preserving discard top; Give/penalty recycle; no recycling hands/held draws; explicit depleted-state fallback; large grids, balanced additions and stable identities through row compaction.
 11. Server-to-client privacy assertions for every command/event/snapshot/reconnect path. Another player's hidden face must not appear in payloads, normal DOM, logs, aria attributes, or error strings. Ordinary snapshots must not expose the owner's entire hidden hand either.
 12. Two rooms isolated; invalid invite; seat limit; forged actor/effect/slot; duplicate connection; reconnect restores seat; missed acknowledgement resolved once; outdated/offline commands cannot change a later round; confirmed disconnect freezes timing consistently.
 13. Memory-mode restart shows room loss honestly. SQLite-mode process restart restores the same paused room, cards, queued effects, and action deduplication; authenticated clients reconnect and resume without duplicate draws or skipped turns.
 14. A browser scenario using separate authenticated contexts completes all FOUR rounds through UI controls with actual websockets, shows round/final scoring, and can start another game. At least one browser scenario exercises each special-card interaction, matching, and reconnect.
-15. Ten concurrent socket clients plus 2-/6-/10-player browser screenshots; responsive mobile screenshots; animation endpoints/stable grid positions; no clipping or browser console errors. Exercise the production build, not only the dev server.
+15. Six concurrent socket clients plus 2–6-player browser screenshots; responsive mobile screenshots; animation endpoints/stable grid positions; no clipping or browser console errors. Exercise the production build, not only the dev server.
 16. Simulated latency/jitter/disconnect tests establish convergence and deterministic arrival-order outcomes. Distinguish intentionally late match penalties from stale-state rejections. Record observed timings without claiming a local test proves worldwide fairness.
 
 Inspect screenshots yourself with available browser/image tools, then fix actual visual issues. Do not claim manual two-device or hosted playtesting that was not performed. If an environment blocks a test, record the precise command and blocker, complete alternatives, and clearly distinguish implemented from verified.
@@ -241,7 +234,7 @@ Provide:
 
 - Complete frontend, server, shared runtime schemas, pure engine, tests, and artwork manifest/import validation.
 - `package.json` scripts: `npm run dev`, `npm run build`, `npm start`, `npm run lint`, `npm run typecheck`, `npm test`, `npm run test:e2e`, and `npm run verify` (the documented automated gate). `npm run dev` should give a usable local URL with one command.
-- `.env.example` with documented `HOST_SECRET`, `PUBLIC_ORIGIN`, `PERSISTENCE=memory`, `DATA_DIR`, `MATCH_DELAY_MS=1000`, and any other genuinely needed variables. Production startup should reject missing host credentials or invalid configuration with a useful error. Never require a credential to be committed. Match-delay overrides cannot accidentally become zero in production through bad parsing.
+- `.env.example` with documented `PUBLIC_ORIGIN`, `PERSISTENCE=memory`, `DATA_DIR`, `MATCH_DELAY_MS=1000`, and any other genuinely needed variables. Production startup should reject invalid configuration with a useful error. Never require a credential to be committed. Match-delay overrides cannot accidentally become zero in production through bad parsing.
 - Production `PORT` handling, `/healthz` without secret/game-state output, SPA deep-link handling for invites, correct asset paths on case-sensitive Linux, graceful shutdown, and appropriately bounded operational logs.
 - README.md with install/local run, two-browser testing, host-secret setup, npm commands, and troubleshooting.
 - RULES.md with the confirmed rules, exact timing/matching grouping, defaults, and explicit differences from the PDF.
@@ -264,7 +257,7 @@ Proceed through these phases without waiting for approval after every phase:
 5. Run full games in isolated browser contexts; inspect desktop/mobile screenshots; fix state/privacy/visual issues; test ten connections and restart recovery.
 6. Validate the production build/start path, write deployment configuration/docs, and make a reviewed local git checkpoint.
 
-The app is locally complete only when a fresh install can start it, 2–10 invited players can share one authoritative room, all specified rules work, a four-round game can finish, animations preserve trackable card locations, reconnect behaves correctly, hidden state is protected, and the required checks pass or a specific external verification blocker is honestly recorded.
+The app is locally complete only when a fresh install can start it, 2–6 invited players can share one authoritative room, all specified rules work, a four-round game can finish, animations preserve trackable card locations, reconnect behaves correctly, hidden state is protected, and the required checks pass or a specific external verification blocker is honestly recorded.
 
 The app is hosted/playable over the internet only after an actual deployment and live invite/reconnect smoke test. Do not conflate deploy-ready with deployed. If hosting authorization or credentials are missing, finish every locally achievable item, provide exact remaining account actions, and stop at that real boundary. A Render/GitHub account or domain question must not leave the engine, UI, tests, or deployment files unfinished.
 

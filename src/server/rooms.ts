@@ -1,22 +1,22 @@
 import { randomBytes, randomInt, createHash } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { apply, connection, pause, project, tick } from '../engine/engine.js';
-import { assertCards, createState, newPlayer, RuleError, need, type Dependencies } from '../engine/model.js';
-import { commandSchema, type Command, type Reply, type View } from '../shared/protocol.js';
+import { assertCards, deck, createState, newPlayer, RuleError, need, type Dependencies } from '../engine/model.js';
+import { MAX_PLAYERS, commandSchema, type Command, type Reply, type View } from '../shared/protocol.js';
 import type { RecordData, Store } from './store.js';
 import type { Config } from './config.js';
 const token=()=>randomBytes(24).toString('base64url');
 export const verifier=(value:string)=>createHash('sha256').update(value).digest('hex');
-export type Room={data:RecordData;queue:Promise<unknown>;controllers:Map<string,string>;pendingDisconnects:Map<string,string>;publish:(view:(you:string)=>View)=>void;expire:()=>void};
+export type Room={callDeadline?:number;data:RecordData;queue:Promise<unknown>;controllers:Map<string,string>;pendingDisconnects:Map<string,string>;publish:(view:(you:string)=>View)=>void;expire:()=>void};
 export class Rooms {
  rooms=new Map<string,Room>();deps:Dependencies;metrics:number[]=[];
  constructor(public store:Store,public config:Config,dependencies?:Dependencies){
   this.deps=dependencies??{now:()=>performance.timeOrigin+performance.now(),randomInt,delay:config.delay,motion:config.motion,peek:config.peek,grace:config.grace,restart:config.restart};
   for(const data of store.load()){
-   const s=data.state;const restoredReason=s.paused?.reason==='No cards available'?'No cards available':'Server restarted. Rejoin and resume.';const oldNow=s.paused?.since??data.lastActive;
+   const s=data.state;if(s.phase==='LOBBY'&&!s.round&&!s.deck.length)s.deck=deck();for(const p of s.players){if(p.slots.some(slot=>slot.row===undefined||slot.column===undefined)){const columns=[0,0];p.columns=Math.max(2,Math.ceil(p.slots.length/2));p.slots.forEach((slot,i)=>{slot.row=i%2;slot.column=slot.card?columns[slot.row]++:Math.floor(i/2);});}}for(const p of s.players){p.initialOpen??=p.hidden?[]:[...(p.initial??[])];p.viewingLeaderboard??=false;}if(s.held)s.held.id??=token();for(const m of s.movements)m.id??=token();const restoredReason=s.paused?.reason==='No cards available'?'No cards available':'Server restarted. Rejoin and resume.';const oldNow=s.paused?.since??data.lastActive;
    // Rebase saved remaining durations. Downtime never consumes a competitive window.
    const delta=this.deps.now()-oldNow;
-   s.visualUntil+=delta;s.unlockAt+=delta;s.restartAt=0;
+   s.visualUntil+=delta;s.unlockAt+=delta;if(s.initialPeek){s.initialPeek.revealAt+=delta;s.initialPeek.hideAt+=delta;s.initialPeek.finishAt+=delta;}else if(s.phase==='INITIAL_PEEK'){s.initialPeek={revealAt:this.deps.now()-2720,hideAt:this.deps.now()-360,finishAt:this.deps.now(),stage:2};}if(s.finalEndsAt!==undefined)s.finalEndsAt+=delta;s.restartAt=0;
    for(const m of s.movements){m.start+=delta;m.end+=delta;}
    for(const r of s.reveals)r.until+=delta;
    for(const e of s.effects)if(e.viewUntil!==undefined)e.viewUntil+=delta;
@@ -36,7 +36,7 @@ export class Rooms {
  async join(room:Room,name:string,requestId:string){const credential=token();let seat=token();await this.transaction(room,d=>{
   const request=verifier(`join:${requestId}`);const previous=d.admissions?.[request];
   if(previous){seat=previous;for(const [key,value] of Object.entries(d.sessions))if(value===seat)delete d.sessions[key];}
-  else{need(d.state.phase==='LOBBY','This game has started. Existing players can reconnect.');need(d.state.players.length<10,'Room is full (10 players).');d.state.players.push(newPlayer(seat,name));(d.admissions??={})[request]=seat;d.state.seq++;}
+  else{need(d.state.phase==='LOBBY'&&!d.state.betweenRounds,'This game has started. Existing players can reconnect.');need(d.state.players.length<MAX_PLAYERS,'Room is full (6 players).');d.state.players.push(newPlayer(seat,name));(d.admissions??={})[request]=seat;d.state.seq++;}
   d.sessions[verifier(credential)]=seat;
  });return {seat,credential};}
  auth(room:Room,credential:string){return room.data.sessions[verifier(credential)];}
@@ -66,6 +66,7 @@ export class Rooms {
   for(const [seat,socket] of room.pendingDisconnects)await this.disconnect(room,seat,socket);
   const s=room.data.state;const now=this.deps.now();const ttl=s.phase==='GAME_RESULTS'?1800000:7200000;
   if((s.phase==='GAME_RESULTS'||!s.players.some(p=>p.connected))&&now-room.data.lastActive>=ttl){const task=room.queue.then(()=>{if(this.deps.now()-room.data.lastActive>=ttl){this.store.remove(s.room);this.rooms.delete(s.room);room.expire();}});room.queue=task.catch(()=>{});await task;return;}
-  if(!s.paused&&(s.effects[0]?.viewUntil!==undefined&&s.effects[0].viewUntil<=now||s.reveals.some(r=>r.until<=now)))await this.transaction(room,d=>tick(d.state,this.deps));
+  if(!s.paused&&s.lastTurn&&s.visualUntil>0&&now>=s.visualUntil&&room.callDeadline!==s.visualUntil){await this.transaction(room,d=>{d.state.seq++;});room.callDeadline=s.visualUntil;}
+  if(!s.paused&&(s.phase==='INITIAL_PEEK'&&!!s.initialPeek&&now>=[s.initialPeek.revealAt,s.initialPeek.hideAt,s.initialPeek.finishAt][s.initialPeek.stage]||s.effects[0]?.viewUntil!==undefined&&s.effects[0].viewUntil<=now||s.reveals.some(r=>r.until<=now)||s.phase==='FINAL_MATCH_WINDOW'&&!s.effects.length&&(s.finalEndsAt===undefined||s.finalEndsAt<=now)))await this.transaction(room,d=>tick(d.state,this.deps));
  }));}
 }

@@ -19,7 +19,7 @@ This repository is `/Users/jackgaletti/Projects/archduke-game`. No external depl
 
 1. In Render, choose **New → Blueprint**, select the private `archduke-game` repository and branch `main`, using root `render.yaml`.
 2. Review the single paid Node web service. Region defaults to Oregon (near this workstation); choose a region near the group. Keep **one instance** and no autoscaling.
-3. Enter a private `HOST_SECRET` (8+ characters, preferably a longer passphrase). Set `PUBLIC_ORIGIN` to the exact Render HTTPS URL shown for this service, e.g. `https://YOUR_SERVICE_SLUG.onrender.com`, without a trailing slash. If its generated hostname is only known after creation, set/update this value in Environment and redeploy; invalid/missing production origins intentionally fail startup.
+3. Set `PUBLIC_ORIGIN` to the exact Render HTTPS URL shown for this service, e.g. `https://YOUR_SERVICE_SLUG.onrender.com`, without a trailing slash. If its generated hostname is only known after creation, set/update this value in Environment and redeploy; invalid/missing production origins intentionally fail startup.
 4. Runtime **24.18.1**; build **`npm ci && npm run build`**; start **`npm start`**; health path **`/healthz`**. Render supplies PORT; the server binds it on `0.0.0.0`. Frontend and WebSockets share this process.
 5. Default **PERSISTENCE=memory**, **DATA_DIR=./data**, **MATCH_DELAY_MS=1000**. No disk. Do not publish the Vite dev server or choose a static-only host. Auto deploy is off to avoid interrupting a game when a branch changes.
 
@@ -41,7 +41,7 @@ A persistent disk is runtime-only and disables zero-downtime deploys. Expect a b
 ## Verify the live service
 
 - Open `https://YOUR_SERVICE_SLUG.onrender.com/healthz`: only `{"ok":true}` should appear.
-- In one browser profile, create with HOST_SECRET; open its invite in another independent profile/device and join without that secret.
+- In one browser profile, enter a name and click Start game; copy its invite link, open it in another independent profile/device, and join through the branded name-only entry screen. Refresh and reopen the link to verify the same seat reconnects.
 - Confirm ready/peek, draw/discard, match, one special interaction, and refresh/reconnect/pause/resume.
 - Confirm invitation is HTTPS on the real origin, no mixed-content requests or console errors, and only one tab controls a seat.
 - Complete a hosted four-round game before claiming real internet playtesting. Local tests do not prove worldwide timing fairness.

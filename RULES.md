@@ -24,6 +24,8 @@ Only a card leaving a grid through replacement or successful matching triggers:
 - **11 Swap:** exchange occupied slots in two DIFFERENT eligible players' grids, without revelation. Actor may be one of them.
 - **12 Peek:** actor privately inspects one eligible slot for three seconds, with an immediate second click to close early.
 
+When a Peek actor selects their own slot, the server first checks it against the visible discard. A match moves to discard and queues its effect while the original Peek remains pending; any other value opens as the actor's private Peek without a matching penalty.
+
 Effects resolve FIFO, owned by the player whose grid supplied the card. Matching remains open and appends new effects. Only the head actor can target or Skip. No legal target/supply means automatic skip with explanation. Targets and occupancy revisions are checked when submitted.
 
 ## Timing and Archduke

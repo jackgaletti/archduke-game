@@ -32,7 +32,7 @@ export type View = {
  room:string;code:string;invite:string;you:string;host:string;game:number;round:number;seq:number;phase:Phase;serverNow:number;
  initialPeek?:{revealAt:number;hideAt:number;finishAt:number};players:PublicPlayer[];next:string;turn:number;window:string;open:boolean;unlockAt:number;visualUntil:number;restartAt:number;finalEndsAt?:number;betweenRounds?:boolean;
  drawCount:number;discardCount:number;discard?:number;held?:{id:string;owner:string;source:'draw'|'discard';value?:number};
- effects:{id:string;actor:string;kind:1|11|12;viewUntil?:number;target?:Target}[];caller?:string;finalTurns:string[];
+ effects:{id:string;actor:string;kind:1|11|12;viewUntil?:number;target?:Target;targets?:Target[]}[];caller?:string;finalTurns:string[];
  paused?:{reason:string;since:number;graceUntil:number};movements:Movement[];activity:string[];history:Result[][];winners:string[];
  canCallArchduke:boolean;incompatible?:string;lastTurn?:string;acks:Record<string,Reply>;persistence:'memory'|'sqlite';
 };

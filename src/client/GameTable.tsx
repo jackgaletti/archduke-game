@@ -3,7 +3,6 @@ import type { Command, Target, View } from '../shared/protocol';
 import { relativePlayers, playLayout, handGeometry } from './table-layout';
 import { CardFace, CardMotion } from './card-motion';
 import { InitialFace } from './initial-face';
-import { PeekCard } from './peek-card';
 import artwork from '../shared/artwork.json';
 import { CallBurst } from './call-burst';
 type Action=Command extends infer C?C extends Command?Omit<C,'id'|'game'|'round'>:never:never;
@@ -17,9 +16,9 @@ function Invite({token}:{token:string}){
  return <div className="invite-control"><button onClick={()=>void copy()}>{copied?'Copied':'Invite'}</button><span className="sr-only" role="status">{copied?'Invite link copied':''}</span>{fallback&&<div className="invite-fallback"><p role="alert">Couldn’t copy. Select the link:</p><input aria-label="Invite link" readOnly value={link} onFocus={e=>e.currentTarget.select()}/><button aria-label="Close invite link" onClick={()=>setFallback(false)}>×</button></div>}</div>;
 }
 export function GameTable({v,now,connected,taken,pending,loaded,error,clearError,send}:Props){
- const surface=useRef<HTMLDivElement>(null);const [resizing,setResizing]=useState(false);const [portrait,setPortrait]=useState(()=>innerHeight>innerWidth);const [selected,setSelected]=useState<Target[]>([]);const [giveHover,setGiveHover]=useState<string>();const [size,setSize]=useState({width:innerWidth-64,height:innerHeight-150});const dialog=useRef<HTMLDialogElement>(null);const [inspection,setInspection]=useState<{player:string;slot:number}>();const inspector=useRef<HTMLDialogElement>(null);
+ const surface=useRef<HTMLDivElement>(null);const [resizing,setResizing]=useState(false);const [portrait,setPortrait]=useState(()=>innerHeight>innerWidth);const [giveHover,setGiveHover]=useState<string>();const [size,setSize]=useState({width:innerWidth-64,height:innerHeight-150});const dialog=useRef<HTMLDialogElement>(null);const [inspection,setInspection]=useState<{player:string;slot:number}>();const inspector=useRef<HTMLDialogElement>(null);
  useEffect(()=>{const update=()=>{setPortrait(innerHeight>innerWidth);const bounds=surface.current?.getBoundingClientRect();if(bounds)setSize({width:bounds.width,height:bounds.height});};addEventListener('resize',update);return()=>removeEventListener('resize',update);},[]);
- useEffect(()=>{setSelected([]);setGiveHover(undefined);setInspection(undefined);},[v.phase,v.effects[0]?.id,v.game,v.round]);
+ useEffect(()=>{setGiveHover(undefined);setInspection(undefined);},[v.phase,v.effects[0]?.id,v.game,v.round]);
  useLayoutEffect(()=>{const element=surface.current;if(!element)return;let timer:ReturnType<typeof setTimeout>;const observer=new ResizeObserver(([entry])=>{setResizing(true);setSize({width:entry.contentRect.width,height:entry.contentRect.height});clearTimeout(timer);timer=setTimeout(()=>setResizing(false),400);});observer.observe(element);return()=>{observer.disconnect();clearTimeout(timer);};},[]);
  useEffect(()=>{if(inspection)inspector.current?.showModal();else inspector.current?.close();},[inspection]);
  const me=v.players.find(p=>p.id===v.you)!;const resultPhase=['ROUND_RESULTS','GAME_RESULTS'].includes(v.phase);
@@ -27,7 +26,7 @@ export function GameTable({v,now,connected,taken,pending,loaded,error,clearError
  const reviewedResults=resultPhase&&me.reviewingResults===false&&v.history.length>0;
  const showLeaderboard=results&&!!me.viewingLeaderboard,revealResults=results&&!showLeaderboard,lobby=(v.phase==='LOBBY'||reviewedResults)&&!results;
  useEffect(()=>{if(showLeaderboard)dialog.current?.showModal();else dialog.current?.close();},[showLeaderboard]);
- const host=v.host===v.you;const effect=v.effects[0];const ownEffect=effect?.actor===v.you;const activePeek=effect?.actor===v.you&&effect.kind===12&&effect.viewUntil!==undefined?effect:undefined;const held=v.held?.owner===v.you;
+ const host=v.host===v.you;const effect=v.effects[0];const ownEffect=effect?.actor===v.you;const selected=ownEffect&&effect.kind===11?effect.targets??[]:[];const held=v.held?.owner===v.you;
  const paused=!!v.paused||!connected||taken||!!v.incompatible;const blocked=paused||pending||now<v.restartAt;const settled=now>=v.visualUntil;
  const canDraw=!blocked&&!v.effects.length&&settled&&now>=v.unlockAt&&now>=v.restartAt&&v.phase==='INTER_TURN'&&v.open&&v.next===v.you;
  const activeDiscardMovement=v.movements.find(m=>m.to==='discard'&&m.under!==undefined&&m.end+(m.kind==='discard'?120:0)>now);
@@ -43,8 +42,8 @@ export function GameTable({v,now,connected,taken,pending,loaded,error,clearError
   if(ownEffect){
    if(effect.viewUntil){send({type:'done',effect:effect.id});return;}
    if(effect.kind===12){send({type:'effect',effect:effect.id,targets:[t]});return;}
-   if(t.player===v.you&&!selected.length){send({type:'match',window:v.window,slots:[t]});return;}
-   if(effect.kind===11){const first=selected[0];if(!first){setSelected([t]);return;}if(first.player===t.player&&first.slot===t.slot){setSelected([]);return;}if(first.player!==t.player){send({type:'effect',effect:effect.id,targets:[first,t]});setSelected([]);}else setSelected([t]);return;}
+   if(effect.kind===11){const first=selected[0];if(!first){send({type:'effect',effect:effect.id,targets:[t]});return;}if(first.player===t.player&&first.slot===t.slot){send({type:'effect',effect:effect.id,targets:[]});return;}if(first.player!==t.player){send({type:'effect',effect:effect.id,targets:[first,t]});return;}send({type:'effect',effect:effect.id,targets:[t]});return;}
+   if(t.player===v.you){send({type:'match',window:v.window,slots:[t]});return;}
   }
   send({type:'match',window:v.window,slots:[t]});
  }
@@ -52,7 +51,7 @@ export function GameTable({v,now,connected,taken,pending,loaded,error,clearError
   if(blocked||results||lobby||!slot.occupied)return false;
   if(v.phase==='INITIAL_PEEK')return false;
   if(held)return p.id===v.you&&settled;
-  if(ownEffect){if(effect.viewUntil)return effect.target?.player===v.you&&effect.target.player===p.id&&effect.target.slot===slot.index&&effect.target.rev===slot.rev;if(p.id===v.you)return effect.kind===12?settled:v.open;if(effect.kind===1)return false;return settled&&p.id!==v.caller;}
+  if(ownEffect){if(effect.viewUntil)return effect.target?.player===p.id&&effect.target.slot===slot.index&&effect.target.rev===slot.rev;if(p.id===v.you)return [11,12].includes(effect.kind)?settled:v.open;if(effect.kind===1)return false;return settled&&p.id!==v.caller;}
   return p.id===v.you&&v.open;
  }
  const last=v.history.at(-1);const pointsFor=(id:string)=>v.history.reduce((n,round)=>n+(round.find(x=>x.player===id)?.place??0),0);
@@ -61,18 +60,14 @@ export function GameTable({v,now,connected,taken,pending,loaded,error,clearError
  function renderSeat(p:View['players'][number],index:number){
   const own=p.id===v.you;const giving=ownEffect&&effect.kind===1&&settled&&!blocked&&p.id!==v.you&&p.id!==v.caller;
   const card=own?layout.card:layout.opponentCard,gap=own?layout.gap:5;const geometry=handGeometry(card,gap,p.columns*2,own?layout.expansion:1);geometry.columns=p.columns;geometry.step=(geometry.width-card)/(Math.max(2,p.columns)-1);
-  const peekTarget=activePeek?.target?.player===p.id?activePeek.target:undefined;const peekSlot=peekTarget?p.slots.find(slot=>slot.index===peekTarget.slot&&slot.rev===peekTarget.rev):undefined;
   const ownPending=v.held?.owner===p.id;const isTurn=p.id===activePlayer&&!lobby&&!results&&v.phase!=='INITIAL_PEEK';
   const pendingCard=<button className={`card pending-card ${ownPending?'occupied':''}`} data-endpoint={`held:${p.id}`} data-held-id={ownPending?v.held?.id:undefined} title={ownPending&&own&&v.held?.source==='draw'?'Discard drawn card':undefined} aria-label={ownPending?own&&v.held?.source==='draw'?'Discard drawn card':`${p.name} pending card${own?' — replace an occupied slot':''}`:'Pending card area'} disabled={!ownPending||!own||v.held?.source!=='draw'||blocked||!settled} onClick={()=>send({type:'resolveDraw',turn:v.turn})}>{ownPending&&<CardFace value={v.held?.value}/>}</button>;
-  const peekWidth=own?card:Math.min(card*1.5,layout.card*.9,layout.central*.75),peekHeight=peekWidth*1.4;
-  return <section key={p.id} className={`seat ${own?'own':'opponent'} ${isTurn?'turn-seat':''} ${effect?.target?.player===p.id?'effect-target':''}`} data-seat={p.id} data-relative={index} style={{'--card-width':`${card}px`,'--card-gap':`${gap}px`,'--hand-width':`${geometry.width}px`,'--hand-height':`${geometry.height}px`,'--peek-width':`${peekWidth}px`,'--peek-height':`${peekHeight}px`} as CSSProperties}>
+  return <section key={p.id} className={`seat ${own?'own':'opponent'} ${isTurn?'turn-seat':''} ${effect?.target?.player===p.id?'effect-target':''}`} data-seat={p.id} data-relative={index} style={{'--card-width':`${card}px`,'--card-gap':`${gap}px`,'--hand-width':`${geometry.width}px`,'--hand-height':`${geometry.height}px`} as CSSProperties}>
    <div className={`seat-heading ${!lobby&&p.id===v.caller?'caller-name':''}`}><div className="name-mark"><span className="turn-triangle" aria-hidden="true"/>{giving?<button className="give-target" data-hovered={giveHover===p.id} disabled={blocked||!settled} onPointerMove={()=>setGiveHover(p.id)} onPointerLeave={()=>setGiveHover(undefined)} onBlur={()=>setGiveHover(undefined)} onClick={()=>send({type:'effect',effect:effect.id,recipient:p.id})} aria-label={`Give to ${p.name}`}>{p.name}</button>:<span title={p.name}>{p.name}</span>}{lobby&&p.ready&&<span className="ready-check" aria-label="Ready">✓</span>}</div></div>
    {lobby?<div className="waiting-hand"><div className="card-grid">{[0,1,2,3].map(i=><div key={i} className="card waiting-slot" style={{'--slot-x':`${Math.floor(i/2)*(card+gap)}px`,'--slot-y':`${i%2*(card*1.4+gap)}px`} as CSSProperties}/>)}</div>{own&&!me.ready&&<button className="ready-button" disabled={!loaded||blocked} onClick={()=>send({type:'ready',ready:true})}>Ready</button>}</div>:<div className="hand"><div className="card-grid">{p.slots.map(slot=>{
-    const isSelected=selected.some(t=>t.player===p.id&&t.slot===slot.index&&t.rev===slot.rev);const target=effect?.target?.player===p.id&&effect.target.slot===slot.index;const displayValue=!own&&peekTarget?.slot===slot.index&&peekTarget.rev===slot.rev?undefined:slot.value;
-    const lifted=!own&&peekTarget?.slot===slot.index&&peekTarget.rev===slot.rev;
-    return <button key={slot.index} className={`card ${slot.occupied?'':'hole'} ${isSelected?'selected':''} ${target?'peek-target':''} ${displayValue!==undefined?'revealed':''}`} style={{'--slot-x':`${slot.column*geometry.step}px`,'--slot-y':`${slot.row*(card*1.4+gap)}px`,'--layer':slot.column+1} as CSSProperties} data-endpoint={`${p.id}:${slot.index}`} data-peek-source={lifted||undefined} data-slot={slot.index} data-row={slot.row} data-column={slot.column} disabled={!allowed(p,slot)} onClick={()=>cardClick({player:p.id,slot:slot.index,rev:slot.rev})} aria-label={`${p.name} slot ${slot.index+1}${displayValue!==undefined?`, card ${displayValue}`:slot.occupied?', face down':', empty'}`} aria-pressed={isSelected}>{slot.occupied&&(own&&v.initialPeek&&[1,3].includes(slot.index)?<InitialFace value={displayValue} timing={v.initialPeek} now={v.paused?.since??now} paused={!!v.paused}/>:<CardFace value={displayValue}/>)}</button>;
+    const isSelected=selected.some(t=>t.player===p.id&&t.slot===slot.index&&t.rev===slot.rev);const target=effect?.target?.player===p.id&&effect.target.slot===slot.index;const displayValue=slot.value;
+    return <button key={slot.index} className={`card ${slot.occupied?'':'hole'} ${isSelected?'selected':''} ${target?'peek-target':''} ${displayValue!==undefined?'revealed':''}`} style={{'--slot-x':`${slot.column*geometry.step}px`,'--slot-y':`${slot.row*(card*1.4+gap)}px`,'--layer':slot.column+1} as CSSProperties} data-endpoint={`${p.id}:${slot.index}`} data-slot={slot.index} data-row={slot.row} data-column={slot.column} disabled={!allowed(p,slot)} onClick={()=>cardClick({player:p.id,slot:slot.index,rev:slot.rev})} aria-label={`${p.name} slot ${slot.index+1}${displayValue!==undefined?`, card ${displayValue}`:slot.occupied?', face down':', empty'}`} aria-pressed={isSelected}>{slot.occupied&&(own&&v.initialPeek&&[1,3].includes(slot.index)?<InitialFace value={displayValue} timing={v.initialPeek} now={v.paused?.since??now} paused={!!v.paused}/>:<CardFace value={displayValue}/>)}</button>;
    })}</div>{!own&&pendingCard}</div>}
-   {!own&&activePeek&&peekTarget&&peekSlot?.value!==undefined&&<PeekCard target={peekTarget} value={peekSlot.value} onClose={()=>send({type:'done',effect:activePeek.id})}/>}
    {own&&<div className="own-pending-zone">{pendingCard}</div>}
   </section>;
  }

@@ -4,7 +4,7 @@ The authoritative source is ARCHDUKE_BUILD_PROMPT.md. The optional PDF is not us
 
 ## The game
 
-2–6 players, stable clockwise seating, four rounds. Deal four hidden cards in a two-row grid. After dealing, the server automatically reveals each player’s own bottom two cards: a 360 ms flip, three full seconds face up, then a 360 ms closing flip. Other players receive no private faces. Refresh never restarts the sequence; room pauses freeze its remaining time. The initial discard follows automatically. First round starts randomly; later rounds start with the previous last-place player.
+2–6 players, stable clockwise seating, four rounds. Deal four hidden cards in a two-row grid. After dealing, the server automatically reveals each player’s own bottom two cards: a 360 ms flip, two full seconds face up, then a 360 ms closing flip. Other players receive no private faces. Refresh never restarts the sequence; room pauses freeze its remaining time. The initial discard follows automatically. First round starts randomly; later rounds start with the previous last-place player.
 
 The 104-card deck: −3 ×2, 0 ×4, each 1–10 ×8, 11 ×6, 12 ×8, 13 ×4. Physical cards are never duplicated. Each round shuffles the whole deck independently.
 
@@ -24,7 +24,9 @@ Only a card leaving a grid through replacement or successful matching triggers:
 - **11 Swap:** exchange occupied slots in two DIFFERENT eligible players' grids, without revelation. Actor may be one of them.
 - **12 Peek:** actor privately inspects one eligible slot for three seconds, with an immediate second click to close early.
 
-When a Peek actor selects their own slot, the server first checks it against the visible discard. A match moves to discard and queues its effect while the original Peek remains pending; any other value opens as the actor's private Peek without a matching penalty.
+The server keeps per-player, per-round memory of physical cards that player has actually seen in their own hand: the automatic opening Peek, a card picked up from either pile, a private Peek of an own card, or a wrong-match reveal. Cards are removed from that memory when they leave or are swapped out, and all memory clears between rounds.
+
+That memory disambiguates own-card clicks during Peek and Swap. Clicking a previously seen own card that matches the discard performs a match, keeps the current effect pending, and queues the newly matched effect. Clicking an unseen own card uses it as the Peek target or first Swap endpoint, even when its hidden value also matches. If a Swap starts with another player's card, the following own-card click completes the Swap regardless of memory. Opponent Peeks flip the selected card in place at its normal hand size.
 
 Effects resolve FIFO, owned by the player whose grid supplied the card. Matching remains open and appends new effects. Only the head actor can target or Skip. No legal target/supply means automatic skip with explanation. Targets and occupancy revisions are checked when submitted.
 

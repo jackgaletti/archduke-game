@@ -1,8 +1,8 @@
 import type { Phase, Movement, Result, Reply, Target } from '../shared/protocol.js';
 export type Card = {id:number;value:number};
 export type Slot = {rev:number;card?:Card;row?:number;column?:number};
-export type Player = {id:string;name:string;connected:boolean;ready:boolean;reviewingResults?:boolean;viewingLeaderboard?:boolean;slots:Slot[];columns?:number;initial?:number[];initialOpen?:number[];hidden:boolean};
-export type Effect = {id:string;actor:string;kind:1|11|12;target?:Target;viewUntil?:number;value?:number};
+export type Player = {id:string;name:string;connected:boolean;ready:boolean;reviewingResults?:boolean;viewingLeaderboard?:boolean;slots:Slot[];columns?:number;initial?:number[];initialOpen?:number[];seen?:number[];hidden:boolean};
+export type Effect = {id:string;actor:string;kind:1|11|12;target?:Target;targets?:Target[];viewUntil?:number;value?:number};
 export type State = {
  room:string;code:string;invite:string;host:string;game:number;round:number;seq:number;phase:Phase;players:Player[];
  deck:Card[];discard:Card[];held?:{id:string;owner:string;source:'draw'|'discard';card:Card};
@@ -31,7 +31,7 @@ export const sum=(p:Player)=>p.slots.reduce((n,s)=>n+(s.card?.value??0),0);
 export function createState(room:string,code:string,invite:string,host:Player):State{
  return {room,code,invite,host:host.id,game:0,round:0,seq:0,phase:'LOBBY',players:[host],deck:deck(),discard:[],next:'',turn:0,window:'',open:false,unlockAt:0,visualUntil:0,restartAt:0,effects:[],finalTurns:[],incorrectApplied:false,movements:[],reveals:[],activity:[],history:[],winners:[],acks:{},serial:0};
 }
-export function newPlayer(id:string,name:string):Player{return {id,name,connected:false,ready:false,reviewingResults:false,viewingLeaderboard:false,slots:[],hidden:false};}
+export function newPlayer(id:string,name:string):Player{return {id,name,connected:false,ready:false,reviewingResults:false,viewingLeaderboard:false,slots:[],seen:[],hidden:false};}
 export function assertCards(s:State){
  if(!s.round)return;
  const all=[...s.deck,...s.discard,...s.players.flatMap(p=>p.slots.flatMap(t=>t.card?[t.card]:[])),...(s.held?[s.held.card]:[])];

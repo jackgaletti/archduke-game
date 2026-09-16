@@ -24,7 +24,7 @@ Only a card leaving a grid through replacement or successful matching triggers:
 - **11 Swap:** exchange occupied slots in two DIFFERENT eligible players' grids, without revelation. Actor may be one of them.
 - **12 Peek:** actor privately inspects one eligible slot for three seconds, with an immediate second click to close early.
 
-The server keeps per-player, per-round memory of physical cards that player has actually seen in their own hand: the automatic opening Peek, a card picked up from either pile, a private Peek of an own card, or a wrong-match reveal. Cards are removed from that memory when they leave or are swapped out, and all memory clears between rounds.
+The server keeps per-player, per-round memory only for 11 and 12 cards that player has actually seen in their own hand: the automatic opening Peek, a card picked up from either pile, a private Peek of an own card, or a wrong-match reveal. Cards are removed from that memory when they leave or are swapped out, and all memory clears between rounds.
 
 That memory disambiguates own-card clicks during Peek and Swap. Clicking a previously seen own card that matches the discard performs a match, keeps the current effect pending, and queues the newly matched effect. Clicking an unseen own card uses it as the Peek target or first Swap endpoint, even when its hidden value also matches. If a Swap starts with another player's card, the following own-card click completes the Swap regardless of memory. Opponent Peeks flip the selected card in place at its normal hand size.
 

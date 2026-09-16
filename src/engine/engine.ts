@@ -22,7 +22,7 @@ function normalizeRows(p:Player){p.slots.forEach((slot,i)=>{slot.row??=i%2;slot.
 function append(s:State,d:Dependencies,p:Player,c:Card,kind:string){normalizeRows(p);const counts=[0,1].map(row=>p.slots.filter(s=>s.card&&s.row===row).length);const row=counts[0]<=counts[1]?0:1,index=p.slots.length;p.slots.push({rev:1,card:c,row,column:counts[row]});p.columns=Math.max(p.columns!,counts[row]+1);movement(s,d,kind,'draw',endpoint(p.id,index));}
 function closeRow(p:Player,row:number){let column=0;for(const slot of p.slots)if(slot.card&&slot.row===row)slot.column=column++;}
 function remembers(p:Player,c:Card){return (p.seen??=[]).includes(c.id);}
-function remember(p:Player,c:Card){if(!remembers(p,c))p.seen!.push(c.id);}
+function remember(p:Player,c:Card){if(![11,12].includes(c.value)||remembers(p,c))return;p.seen!.push(c.id);}
 function forget(p:Player,c:Card){p.seen=(p.seen??[]).filter(id=>id!==c.id);}
 function matchKnown(s:State,d:Dependencies,p:Player,t:Target,v:Slot){normalizeRows(p);const card=v.card!;forget(p,card);v.card=undefined;v.rev++;closeRow(p,v.row!);s.discard.push(card);movement(s,d,'match',endpoint(p.id,t.slot),'discard',card.value,undefined,undefined,s.discard.at(-2)?.value);if(!occupied(p)){endRound(s,d);return;}effect(s,p.id,card.value);}
 

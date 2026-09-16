@@ -16,10 +16,10 @@ export function CardMotion({movements,clockNow,paused,scope}:{movements:Movement
   if(initial.current){movements.forEach(m=>seen.current.add(m.id));initial.current=false;return;}
   const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
   for(const [id,flight] of flights.current){const m=movements.find(m=>m.id===flight.movement.id);const visualEnd=m?.kind==='discard'?m.end+120:m?.end;if(!m||visualEnd!==undefined&&visualEnd<=clockNow&&!paused){release(id);continue;}if(flight.paused!==paused||flight.movement.start!==m.start){for(const animation of flight.animations){animation.currentTime=clockNow-m.start;if(paused)animation.pause();else animation.play();}flight.paused=paused;flight.movement=m;}}
-  for(const m of movements){if(seen.current.has(m.id))continue;seen.current.add(m.id);if(m.end<=clockNow)continue;
+  for(const m of movements){if(seen.current.has(m.id)||m.end<=clockNow||m.start>clockNow)continue;seen.current.add(m.id);
    const from=document.querySelector<HTMLElement>(`[data-endpoint="${m.from}"]`),to=document.querySelector<HTMLElement>(`[data-endpoint="${m.to}"]`);if(!from||!to)continue;
    const duration=m.end-m.start+(m.kind==='discard'?120:0);const options:KeyframeAnimationOptions={duration,easing:'cubic-bezier(.25,.1,.25,1)',fill:'both'};
-   function register(id:string,flight:Flight){flights.current.set(id,flight);for(const a of flight.animations){a.currentTime=clockNow-m.start;if(paused)a.pause();}flight.animations[0].onfinish=()=>release(id);}
+   function register(id:string,flight:Flight){flights.current.set(id,flight);for(const a of flight.animations){a.currentTime=clockNow-m.start;if(paused)a.pause();}}
    if(reduced||m.from===m.to){
     // A static endpoint cue retains the same server timeline without spatial motion.
     const animation=to.animate([{outlineColor:'#1b1e4366',outlineStyle:'solid',outlineWidth:'2px',outlineOffset:'-2px'},{outlineColor:'#1b1e4366',outlineStyle:'solid',outlineWidth:'2px',outlineOffset:'-2px'}],options);
@@ -37,7 +37,7 @@ export function CardMotion({movements,clockNow,paused,scope}:{movements:Movement
     // A slot already contains the incoming replacement when the server snapshot
     // arrives. Keep that face-down endpoint rendered underneath the outgoing card
     // instead of hiding it for the longer discard flight.
-    const targets=m.to==='discard'||source.dataset.endpoint==='draw'||source.dataset.endpoint==='discard'?[destination]:[source,destination];targets.forEach(hide);register(id,{node,animations:[move,turn],targets,movement:m,paused,destination});
+    const targets=m.to==='discard'?[]:source.dataset.endpoint==='draw'||source.dataset.endpoint==='discard'?[destination]:[source,destination];targets.forEach(hide);register(id,{node,animations:[move,turn],targets,movement:m,paused,destination});
    }
    fly(from,to,m.id);if(m.kind==='swap')fly(to,from,`${m.id}:return`);
   }
@@ -46,9 +46,9 @@ export function CardMotion({movements,clockNow,paused,scope}:{movements:Movement
   let frame=0;const resize=()=>{cancelAnimationFrame(frame);frame=requestAnimationFrame(()=>{
    for(const flight of flights.current.values()){
     if(!flight.node||!flight.destination)continue;
-    const node=flight.node,a=node.getBoundingClientRect(),b=flight.destination.getBoundingClientRect();const old=flight.animations[0];const elapsed=Number(old.currentTime??0);const timing=old.effect?.getComputedTiming();const remaining=Math.max(80,Number(timing?.endTime??420)-elapsed);const finish=old.onfinish;
+    const node=flight.node,a=node.getBoundingClientRect(),b=flight.destination.getBoundingClientRect();const old=flight.animations[0];const elapsed=Number(old.currentTime??0);const timing=old.effect?.getComputedTiming();const remaining=Math.max(80,Number(timing?.endTime??420)-elapsed);
     old.cancel();node.style.left=`${a.x}px`;node.style.top=`${a.y}px`;node.style.width=`${a.width}px`;node.style.height=`${a.height}px`;
-    const move=node.animate([{transform:'translate(0,0) scale(1,1)'},{transform:`translate(${b.x-a.x}px,${b.y-a.y}px) scale(${b.width/a.width},${b.height/a.height})`}],{duration:remaining,easing:'cubic-bezier(.25,.1,.25,1)',fill:'both'});move.onfinish=finish;if(flight.paused)move.pause();flight.animations[0]=move;
+    const move=node.animate([{transform:'translate(0,0) scale(1,1)'},{transform:`translate(${b.x-a.x}px,${b.y-a.y}px) scale(${b.width/a.width},${b.height/a.height})`}],{duration:remaining,easing:'cubic-bezier(.25,.1,.25,1)',fill:'both'});if(flight.paused)move.pause();flight.animations[0]=move;
    }
   });};addEventListener('resize',resize);return()=>{removeEventListener('resize',resize);cancelAnimationFrame(frame);};
  },[]);

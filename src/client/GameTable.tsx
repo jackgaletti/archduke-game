@@ -58,7 +58,7 @@ export function GameTable({v,now,connected,taken,pending,loaded,error,clearError
  const standing=last?.map(r=>({...r,points:pointsFor(r.player)})).sort((a,b)=>v.round===4?a.points-b.points||a.place-b.place:a.place-b.place).map((r,i,rows)=>({...r,overallPlace:rows.findIndex(row=>row.points===r.points)+1}));
  const inspectionPlayer=v.players.find(p=>p.id===inspection?.player);const inspectionSlot=inspectionPlayer?.slots.find(s=>s.index===inspection?.slot);
  function renderSeat(p:View['players'][number],index:number){
-  const own=p.id===v.you;const giving=ownEffect&&effect.kind===1&&p.id!==v.you&&p.id!==v.caller;
+  const own=p.id===v.you;const giving=ownEffect&&effect.kind===1&&settled&&!blocked&&p.id!==v.you&&p.id!==v.caller;
   const card=own?layout.card:layout.opponentCard,gap=own?layout.gap:5;const geometry=handGeometry(card,gap,p.columns*2,own?layout.expansion:1);geometry.columns=p.columns;geometry.step=(geometry.width-card)/(Math.max(2,p.columns)-1);
   const ownPending=v.held?.owner===p.id;const isTurn=p.id===activePlayer&&!lobby&&!results&&v.phase!=='INITIAL_PEEK';
   const pendingCard=<button className={`card pending-card ${ownPending?'occupied':''}`} data-endpoint={`held:${p.id}`} data-held-id={ownPending?v.held?.id:undefined} title={ownPending&&own&&v.held?.source==='draw'?'Discard drawn card':undefined} aria-label={ownPending?own&&v.held?.source==='draw'?'Discard drawn card':`${p.name} pending card${own?' — replace an occupied slot':''}`:'Pending card area'} disabled={!ownPending||!own||v.held?.source!=='draw'||blocked||!settled} onClick={()=>send({type:'resolveDraw',turn:v.turn})}>{ownPending&&<CardFace value={v.held?.value}/>}</button>;

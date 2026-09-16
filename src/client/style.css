@@ -110,7 +110,7 @@ h2{font-family:'Dela Gothic One',cursive;font-weight:400}.results h2{font-size:c
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
 
 .name-mark{position:relative;display:flex;align-items:center;gap:6px;max-width:100%;min-width:0}.name-mark>span:not(.turn-triangle),.name-mark>button{overflow:hidden;text-overflow:ellipsis}.name-mark>button{font:inherit;border:0;padding:0;min-height:30px}
-.name-mark>.give-target{background:transparent!important;color:inherit;border:0!important;box-shadow:none!important;text-decoration:none}.name-mark>.give-target[data-hovered=true]:not(:disabled),.name-mark>.give-target:focus-visible:not(:disabled){background:transparent!important;color:#394674;text-decoration:none}
+.name-mark>.give-target{background:transparent!important;color:inherit;border:0!important;box-shadow:none!important;text-decoration:none;transition:color 150ms ease!important}.name-mark>.give-target:disabled{opacity:1}.name-mark>.give-target[data-hovered=true]:not(:disabled),.name-mark>.give-target:focus-visible:not(:disabled){background:transparent!important;color:#394674;text-decoration:none}
 .card-grid>.card:active:not(:disabled){transform:translate3d(var(--slot-x),var(--slot-y),0)}
 
 .opponent .seat-heading{width:100%}

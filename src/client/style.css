@@ -46,7 +46,7 @@
 .game-header{height:var(--header-height);padding:12px var(--outer-pad);display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px;position:relative;z-index:5}
 .round-label{font-size:clamp(14px,1.3vw,20px);white-space:nowrap;text-shadow:0 1px 2px #1b1e4348}
 .round-next{min-width:96px;font-size:16px}
-.game .archduke-button{font-size:clamp(20px,1.85vw,28px);padding:9px 20px;line-height:1.2;text-transform:uppercase;white-space:nowrap}
+.game .archduke-button{min-inline-size:calc(9ch + 40px);font-size:clamp(20px,1.85vw,28px);padding:9px 20px;line-height:1.2;text-transform:uppercase;white-space:nowrap}
 .archduke-button.unavailable:disabled{opacity:1;color:var(--muted);border-color:#8998ad;background:#e3e9f0;box-shadow:0 2px 0 #aab7c8}
 .game .archduke-button.available{color:#e9eef4;background:var(--navy);border-color:var(--navy)}
 .game .archduke-button.called:disabled{opacity:1;color:var(--navy);background:var(--gold);border-color:var(--gold)}
@@ -91,7 +91,6 @@
 .piles{display:flex;gap:calc(var(--zone-gap) * 1.65);align-items:start}.draw-stack{position:relative;isolation:isolate}
 .draw-stack::before,.draw-stack::after{content:'';position:absolute;inset:0;border-radius:6px;background:var(--navy);border:1px solid #8d9bb0;transform:translate(2px,3px);z-index:-1}.draw-stack::before{transform:translate(4px,6px);opacity:.55}
 .empty-pile{outline:1px solid #1b1e4340;outline-offset:-1px}
-.final-countdown{position:absolute;inset:0;display:grid;place-items:center;background:var(--main);font-family:'Dela Gothic One',cursive;font-size:clamp(40px,6vw,88px);pointer-events:none;z-index:2}
 .effect-skip{position:fixed;left:var(--outer-pad);bottom:18px;z-index:7;min-height:32px;padding:5px 11px;border-color:#8998ad;background:#e3e9f0;color:var(--navy);font:12px system-ui;box-shadow:0 2px 4px #1b1e4320}
 .table-actions>button{font:13px system-ui;border:0;min-height:34px;padding:6px 10px}.effect-controls{display:flex;gap:8px;align-items:center;font-size:13px}.effect-controls button{font-size:12px;min-height:32px;padding:4px 8px}
 .game-feedback{position:absolute;z-index:8;top:var(--header-height);left:50%;transform:translateX(-50%);max-width:calc(100% - 32px);font:14px system-ui;text-align:center;background:var(--main);box-shadow:0 3px 12px #1b1e4320;border-radius:6px}
@@ -105,7 +104,7 @@ h2{font-family:'Dela Gothic One',cursive;font-weight:400}.results h2{font-size:c
 .leaderboard{padding:0;margin:0 0 28px;list-style:none;display:grid;gap:10px;text-align:left}.leaderboard li{display:grid;grid-template-columns:48px 1fr auto;align-items:center;gap:16px;padding:16px 18px;background:var(--strip);font-size:clamp(14px,2vw,23px)}.leaderboard li:first-child{background:var(--navy);color:var(--main);padding-block:24px}.leaderboard .place{font-size:1.4em;color:var(--gold)}.leaderboard .player-name{overflow-wrap:anywhere}.overall-score{font-variant-numeric:tabular-nums}.results .next-results,.last-place>.primary{min-height:48px;padding:12px 28px;font-size:14px}.results.last-place h2{font-size:clamp(32px,5vw,58px);line-height:1.35;overflow-wrap:anywhere}
 .card-inspector{width:min(460px,calc(100vw - 24px));max-height:90svh;border:1px solid #8998ad;border-radius:8px;padding:30px 24px;text-align:center;overflow:auto}.card-inspector h2{font-size:20px}.slot-choices{display:flex;flex-wrap:wrap;gap:6px;max-height:160px;overflow:auto;margin-bottom:20px}.slot-choices button{min-width:42px;font:14px system-ui;padding:8px}.slot-choices [aria-pressed=true]{background:var(--navy);color:var(--main)}.inspection-card{--card-width:min(190px,35vw);margin:0 auto 10px}.card-inspector p{margin:0;font-size:13px}
 @media(max-width:899px){.opponent-strip{padding-top:10px;gap:12px 6px}.opponent .seat-heading{font-size:16px}.opponent .turn-triangle{border-left-width:7px}}
-@media(max-width:699px){.game-header{gap:6px;padding-inline:12px}.game .archduke-button{font-size:18px;padding:7px 9px}.round-label,.invite-control>button{font-size:11px}.invite-control>button{gap:4px}.lower-composition{flex-direction:column}.center-table{margin-top:0;align-self:center}.personal-area{padding-top:12px;padding-bottom:24px}.own .seat-heading{font-size:18px}.opponent .seat-heading{font-size:12px}.opponent .preparation{font-size:10px}.table-actions{gap:4px}.table-actions button{font-size:12px}dialog.results{padding:36px 20px}.leaderboard li{gap:8px;grid-template-columns:32px 1fr auto}}
+@media(max-width:699px){.game-header{gap:6px;padding-inline:12px}.game .archduke-button{min-inline-size:calc(9ch + 18px);font-size:18px;padding:7px 9px}.round-label,.invite-control>button{font-size:11px}.invite-control>button{gap:4px}.lower-composition{flex-direction:column}.center-table{margin-top:0;align-self:center}.personal-area{padding-top:12px;padding-bottom:24px}.own .seat-heading{font-size:18px}.opponent .seat-heading{font-size:12px}.opponent .preparation{font-size:10px}.table-actions{gap:4px}.table-actions button{font-size:12px}dialog.results{padding:36px 20px}.leaderboard li{gap:8px;grid-template-columns:32px 1fr auto}}
 @supports(padding:max(0px)){.game-header{padding-top:max(12px,env(safe-area-inset-top))}.table-actions{padding-bottom:max(6px,env(safe-area-inset-bottom))}.game{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
 
@@ -127,7 +126,7 @@ h2{font-family:'Dela Gothic One',cursive;font-weight:400}.results h2{font-size:c
 .own-pending-zone .card,.center-table .card{--card-width:var(--central-card)}
 .center-table{margin-top:calc(40px + (var(--primary-card) * 2.8 + 8px - var(--central-card) * 1.4) / 2);min-width:calc(2 * var(--central-card) + 3.3 * var(--zone-gap) + var(--effect-queue-width))}
 .pending-card.occupied:hover:not(:disabled),.pending-card.occupied:focus-visible{filter:drop-shadow(0 4px 4px #1b1e4330)}
-.empty-pile{outline:0}.final-countdown{inset:auto 0 auto 0;top:calc(100% + 12px);display:flex;align-items:baseline;justify-content:center;gap:8px;background:transparent;font:16px 'Dela Gothic One',cursive;white-space:nowrap}.final-countdown strong{font:inherit;font-weight:400}
+.empty-pile{outline:0}
 .table-actions{justify-content:flex-start}.personal-area{padding-inline:var(--outer-pad)}
 @media(max-width:699px){.center-table{margin-top:20px}}
 @media(min-width:700px){.lower-composition{transform:translateX(clamp(12px,1.4vw,22px))}}

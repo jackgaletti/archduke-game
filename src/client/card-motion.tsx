@@ -16,10 +16,10 @@ export function CardMotion({movements,clockNow,paused,scope}:{movements:Movement
   if(initial.current){movements.forEach(m=>seen.current.add(m.id));initial.current=false;return;}
   const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
   for(const [id,flight] of flights.current){const m=movements.find(m=>m.id===flight.movement.id);const visualEnd=m?.kind==='discard'?m.end+120:m?.end;if(!m||visualEnd!==undefined&&visualEnd<=clockNow&&!paused){release(id);continue;}if(flight.paused!==paused||flight.movement.start!==m.start){for(const animation of flight.animations){animation.currentTime=clockNow-m.start;if(paused)animation.pause();else animation.play();}flight.paused=paused;flight.movement=m;}}
-  for(const m of movements){if(seen.current.has(m.id)||m.end<=clockNow||m.start>clockNow)continue;seen.current.add(m.id);
+  for(const m of movements){if(seen.current.has(m.id)||m.end<=clockNow||(m.kind!=='deal'&&m.start>clockNow))continue;seen.current.add(m.id);
    const from=document.querySelector<HTMLElement>(`[data-endpoint="${m.from}"]`),to=document.querySelector<HTMLElement>(`[data-endpoint="${m.to}"]`);if(!from||!to)continue;
    const duration=m.end-m.start+(m.kind==='discard'?120:0);const options:KeyframeAnimationOptions={duration,easing:'cubic-bezier(.25,.1,.25,1)',fill:'both'};
-   function register(id:string,flight:Flight){flights.current.set(id,flight);for(const a of flight.animations){a.currentTime=clockNow-m.start;if(paused)a.pause();}}
+   function register(id:string,flight:Flight){flights.current.set(id,flight);for(const a of flight.animations){a.currentTime=clockNow-m.start;if(paused)a.pause();}if(m.kind==='deal')flight.animations[0].onfinish=()=>release(id);}
    if(reduced||m.from===m.to){
     // A static endpoint cue retains the same server timeline without spatial motion.
     const animation=to.animate([{outlineColor:'#1b1e4366',outlineStyle:'solid',outlineWidth:'2px',outlineOffset:'-2px'},{outlineColor:'#1b1e4366',outlineStyle:'solid',outlineWidth:'2px',outlineOffset:'-2px'}],options);

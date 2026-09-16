@@ -7,5 +7,5 @@ const schema=JSON.parse(readFileSync('scripts/render.schema.json','utf8'));
 const ajv=new Ajv({strict:false,allErrors:true});addFormats(ajv);
 const valid=ajv.validate(schema,blueprint);if(!valid)throw new Error(JSON.stringify(ajv.errors,null,2));
 const [service]=blueprint.services;
-if(blueprint.services.length!==1||service.type!=='web'||service.runtime!=='node'||service.numInstances!==1||service.buildCommand!=='npm ci && npm run build'||service.startCommand!=='npm start'||service.healthCheckPath!=='/healthz'||service.disk)throw new Error('Deployment must remain one Node web service, memory default, exact build/start and health path.');
+if(blueprint.services.length!==1||service.type!=='web'||service.runtime!=='node'||service.numInstances!==1||service.buildCommand!=='npm ci --include=dev && npm run build'||service.startCommand!=='npm start'||service.healthCheckPath!=='/healthz'||service.disk)throw new Error('Deployment must remain one Node web service, memory default, exact build/start and health path.');
 console.log('Render blueprint validated against official schema (downloaded 2026-09-14) and single-authority deployment constraints.');

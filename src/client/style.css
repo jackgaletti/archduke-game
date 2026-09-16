@@ -110,7 +110,7 @@ h2{font-family:'Dela Gothic One',cursive;font-weight:400}.results h2{font-size:c
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
 
 .name-mark{position:relative;display:flex;align-items:center;gap:6px;max-width:100%;min-width:0}.name-mark>span:not(.turn-triangle),.name-mark>button{overflow:hidden;text-overflow:ellipsis}.name-mark>button{font:inherit;border:0;padding:0;min-height:30px}
-.name-mark>.give-target{background:transparent!important;color:inherit;border:0!important;box-shadow:none!important;text-decoration:none}.name-mark>.give-target[data-hovered=true]:not(:disabled),.name-mark>.give-target:focus-visible:not(:disabled){background:transparent!important;color:#394674;text-decoration:underline;text-underline-offset:5px}
+.name-mark>.give-target{background:transparent!important;color:inherit;border:0!important;box-shadow:none!important;text-decoration:none}.name-mark>.give-target[data-hovered=true]:not(:disabled),.name-mark>.give-target:focus-visible:not(:disabled){background:transparent!important;color:#394674;text-decoration:none}
 .card-grid>.card:active:not(:disabled){transform:translate3d(var(--slot-x),var(--slot-y),0)}
 
 .opponent .seat-heading{width:100%}
@@ -120,14 +120,14 @@ h2{font-family:'Dela Gothic One',cursive;font-weight:400}.results h2{font-size:c
 .game,.opponent-strip{transition:background-color 900ms ease}.game.final-phase{--main:var(--warm-main);--strip:var(--warm-strip)}
 .name-mark::after{content:none}.game .archduke-button.called:disabled{border:2px solid var(--navy)}
 .invite-control>button:hover:not(:disabled){background:transparent;color:#394674;text-decoration:underline;text-underline-offset:5px}
-.opponent .hand,.opponent .waiting-hand{margin-inline:auto}.waiting-hand{width:var(--hand-width);position:relative}
+.opponent .hand,.opponent .waiting-hand{margin-inline:auto}.waiting-hand{width:var(--hand-width);position:relative}.waiting-hand>.card-grid{width:calc(2 * var(--card-width) + var(--card-gap));margin-inline:auto}
 .waiting-slot{outline:2px dotted #64738b;outline-offset:-2px}.ready-button{display:block;margin:10px auto 0}.ready-check{font:16px system-ui;color:var(--navy)}
 .seat.own{width:calc(var(--hand-reserve) + var(--zone-gap) + var(--central-card))}
 .own-pending-zone{left:calc(var(--hand-reserve) + var(--zone-gap));top:calc(40px + (var(--hand-height) - var(--central-card) * 1.4) / 2)}
 .own-pending-zone .card,.center-table .card{--card-width:var(--central-card)}
 .center-table{margin-top:calc(40px + (var(--primary-card) * 2.8 + 8px - var(--central-card) * 1.4) / 2);min-width:calc(2 * var(--central-card) + 3.3 * var(--zone-gap) + var(--effect-queue-width))}
 .pending-card.occupied:hover:not(:disabled),.pending-card.occupied:focus-visible{filter:drop-shadow(0 4px 4px #1b1e4330)}
-.empty-pile{outline:0}.final-countdown{inset:auto 0 auto 0;top:calc(100% + 12px);display:flex;align-items:center;justify-content:center;gap:12px;background:transparent;font:16px 'Dela Gothic One',cursive;white-space:nowrap}.final-countdown strong{font-size:30px;font-weight:400}
+.empty-pile{outline:0}.final-countdown{inset:auto 0 auto 0;top:calc(100% + 12px);display:flex;align-items:baseline;justify-content:center;gap:8px;background:transparent;font:16px 'Dela Gothic One',cursive;white-space:nowrap}.final-countdown strong{font:inherit;font-weight:400}
 .table-actions{justify-content:flex-start}.personal-area{padding-inline:var(--outer-pad)}
 @media(max-width:699px){.center-table{margin-top:20px}}
 .name-mark .turn-triangle{position:absolute;right:calc(100% + 6px)}

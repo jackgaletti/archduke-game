@@ -52,10 +52,11 @@ it('resolves private invitations without exposing state and preserves server-iss
  expect((await post(s.url,'/api/join',{name:'Host',invite:host.v.invite,host:host.v.you})).status).toBe(400);
  const sameName=await post(s.url,'/api/join',{name:'Host',invite:host.v.invite});expect(sameName.status).toBe(200);
  const third=await seat(s.url,g.room,sameName.cookie);expect(third.v.you).not.toBe(host.v.you);expect(third.v.host).toBe(host.v.you);
- for(const p of [host,guest,third])expect((await p.send({type:'ready',ready:true})).ok).toBe(true);
  expect((await third.send({type:'start'})).ok).toBe(false);expect((await guest.send({type:'start'})).ok).toBe(false);
+ for(const p of [host,guest,third])expect((await p.send({type:'ready',ready:true})).ok).toBe(true);
+ await waitFor(()=>[host,guest,third].every(p=>p.v.phase==='INITIAL_PEEK'));
  const again=await post(s.url,'/api/join',{name:'Changed name',invite:host.v.invite},g.cookies[1]);expect(again.json.room).toBe(g.room);expect(s.rooms.rooms.get(g.room)!.data.state.players).toHaveLength(3);
- expect((await host.send({type:'start'})).ok).toBe(true);
+ expect((await host.send({type:'start'})).ok).toBe(false);
 });
 
 it('limits repeated public admission requests',async()=>{

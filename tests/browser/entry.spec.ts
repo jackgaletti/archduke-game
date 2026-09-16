@@ -27,7 +27,7 @@ test('name-only creation, branded invite entry, seat reconnect, and landing code
  for(const [i,invitation] of [code,link].entries()){
   const context=await browser.newContext();landingContexts.push(context);const landing=await context.newPage();await landing.goto(new URL(roomURL).origin);await landing.getByRole('textbox',{name:'Name',exact:true}).fill(`Landing ${i}`);
   await landing.getByRole('button',{name:'Join game',exact:true}).click();await expect(landing.getByRole('textbox',{name:'Name',exact:true})).toHaveValue(`Landing ${i}`);
-  await landing.getByLabel('Invitation link or room code').fill(invitation);if(i===0)await landing.getByLabel('Invitation link or room code').press('Enter');else await landing.getByRole('button',{name:'Join game',exact:true}).click();await expect(landing).toHaveURL(roomURL);await expect(landing.locator('.seat.own .seat-heading')).toHaveText('You');
+  await landing.getByLabel('Invitation link or room code').fill(invitation);if(i===0)await landing.getByLabel('Invitation link or room code').press('Enter');else await landing.getByRole('button',{name:'Join game',exact:true}).click();await expect(landing).toHaveURL(roomURL);await expect(landing.locator('.seat.own .seat-heading')).toHaveText(`Landing ${i}`);
  }
  await expect(page.locator('.seat')).toHaveCount(4);await expect(page.locator('.seat.own')).toHaveAttribute('data-seat',hostSeat!);
  await page.goto(link);await expect(page).toHaveURL(roomURL);await expect(page.locator('.seat.own')).toHaveAttribute('data-seat',hostSeat!);await expect(page.getByRole('dialog')).toHaveCount(0);

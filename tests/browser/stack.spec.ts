@@ -17,6 +17,6 @@ test('real back layers track the deck through one card and empty without moving 
   await expect.poll(()=>state(actor).drawCount).toBe(1);await expect(actor.locator('.stack-layer')).toHaveCount(0);await expect(target.locator('img')).toHaveCount(1);expect(await target.boundingBox()).toEqual(before);await actor.screenshot({path:'artifacts/draw-stack-one.png'});
   expect(state(actor).players.find(p=>p.id===recipient.id)!.slots.every(slot=>slot.value===undefined)).toBe(true);
   await target.click();await expect.poll(()=>state(actor).drawCount).toBe(0);await expect(actor.locator('.stack-layer')).toHaveCount(0);await expect(target.locator('img')).toHaveCount(0);expect(await target.boundingBox()).toEqual(before);await expect(actor.locator('.own .pending-card')).toBeEnabled();await actor.screenshot({path:'artifacts/draw-stack-empty.png'});
-  expect(state(pages.find(p=>p!==actor)!).held?.value).toBeUndefined();await actor.locator('.own .pending-card').click();await expect.poll(()=>state(actor).held).toBeUndefined();clean(pages);await guest.context().close();
+  expect(state(pages.find(p=>p!==actor)!).held?.value).toBeUndefined();await actor.locator('[data-endpoint="discard"]').click();await expect.poll(()=>state(actor).held).toBeUndefined();clean(pages);await guest.context().close();
  }finally{await app.close();}
 });

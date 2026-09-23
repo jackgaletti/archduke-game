@@ -1,0 +1,9 @@
+/* Only the private opponent Peek is lifted; the source keeps its layout slot. */
+.card[data-peek-lifted]>.card-face{visibility:hidden}
+.card[data-peek-lifted]{outline:none;pointer-events:none}
+.game:has([data-peek-lifted]) .opponent-strip{isolation:isolate}
+.opponent-peek-layer{position:fixed;inset:0;z-index:4;pointer-events:none}
+.opponent-peek-card{position:fixed;display:block;transform-origin:top left;pointer-events:none;transition:none;will-change:transform}
+.opponent-peek-card>.card-face{transition:none}
+.opponent-peek-card:hover{background:transparent}
+.opponent-peek-card:focus-visible{outline:2px solid var(--navy)!important;outline-offset:3px}

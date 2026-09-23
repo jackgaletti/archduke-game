@@ -6,31 +6,31 @@ test('name-only creation, branded invite entry, seat reconnect, and landing code
  mkdirSync('artifacts',{recursive:true});observe(page);await page.context().grantPermissions(['clipboard-read','clipboard-write']);
  await page.goto('/');await expect(page.locator('.home')).toHaveCSS('background-color','rgb(203, 215, 229)');await expect(page.locator('.home input')).toHaveCount(1);await expect(page.getByPlaceholder('Name',{exact:true})).toBeVisible();await expect(page.locator('.home label')).toHaveCount(0);
  await page.getByRole('textbox',{name:'Name',exact:true}).fill('Creator');
- const creation=page.waitForRequest('**/api/create');await page.getByRole('button',{name:'Start game',exact:true}).click();
+ const creation=page.waitForRequest('**/api/create');await page.getByRole('button',{name:'Start',exact:true}).click();
  expect(Object.keys((await creation).postDataJSON()).sort()).toEqual(['id','name']);
- await expect(page.locator('.seat')).toHaveCount(1);const roomURL=page.url();const hostSeat=await page.locator('.seat.own').getAttribute('data-seat');
+ await expect(page.locator('.lobby-players li')).toHaveCount(1);const roomURL=page.url();const hostSeat=state(page).you;
  await expect(page.getByRole('button',{name:'Ready',exact:true})).toBeVisible();
  const code=state(page).code;await page.getByRole('button',{name:'Invite',exact:true}).click();
  const link=await page.evaluate(()=>navigator.clipboard.readText());expect(link).toMatch(/\/invite\/[\w-]+$/);
- const guestContext=await browser.newContext();const guest=await guestContext.newPage();await guest.goto(link);
+ const guestContext=await browser.newContext();const guest=await guestContext.newPage();observe(guest);await guest.goto(link);
  await expect(guest.locator('.home')).toHaveCSS('background-color','rgb(203, 215, 229)');await expect(guest.locator('.invite-entry')).toBeVisible();await expect(guest.locator('.archduke-logo')).toHaveText('Archduke');await expect(guest.locator('.landing-graphic img')).toHaveCount(1);
  await expect(guest.locator('input')).toHaveCount(1);await expect(guest.locator('button')).toHaveCount(1);
  await guest.screenshot({path:'artifacts/invite-name-desktop.png',fullPage:true});await guest.setViewportSize({width:320,height:568});
  await guest.screenshot({path:'artifacts/invite-name-mobile.png',fullPage:true});expect(await guest.evaluate(()=>document.documentElement.scrollWidth)).toBe(320);
- await guest.getByRole('textbox',{name:'Name',exact:true}).fill('Friend');await guest.getByRole('button',{name:'Join game',exact:true}).click();await expect(guest).toHaveURL(roomURL);
- await expect(guest.locator('.seat')).toHaveCount(2);const guestSeat=await guest.locator('.seat.own').getAttribute('data-seat');expect(guestSeat).not.toBe(hostSeat);
- await expect(guest.getByRole('button',{name:'Start game',exact:true})).toHaveCount(0);
- await guest.reload();await expect(guest.locator('.seat.own')).toHaveAttribute('data-seat',guestSeat!);await expect(guest.getByRole('dialog')).toHaveCount(0);
- await guest.goto(link);await expect(guest).toHaveURL(roomURL);await expect(guest.locator('.seat.own')).toHaveAttribute('data-seat',guestSeat!);await expect(guest.getByRole('dialog')).toHaveCount(0);await expect(page.locator('.seat')).toHaveCount(2);
+ await guest.getByRole('textbox',{name:'Name',exact:true}).fill('Friend');await guest.getByRole('button',{name:'Join',exact:true}).click();await expect(guest).toHaveURL(roomURL);
+ await expect(guest.locator('.lobby-players li')).toHaveCount(2);const guestSeat=state(guest).you;expect(guestSeat).not.toBe(hostSeat);
+ await expect(guest.getByRole('button',{name:'Start',exact:true})).toHaveCount(0);
+ await guest.reload();await expect(guest.locator(`.lobby-players [data-player="${guestSeat}"] .lobby-name`)).toHaveText('Friend');await expect(guest.getByRole('dialog')).toHaveCount(0);
+ await guest.goto(link);await expect(guest).toHaveURL(roomURL);await expect(guest.locator(`.lobby-players [data-player="${guestSeat}"] .lobby-name`)).toHaveText('Friend');await expect(guest.getByRole('dialog')).toHaveCount(0);await expect(page.locator('.lobby-players li')).toHaveCount(2);
  // Keep all seats connected while independently exercising both landing entry formats.
  const landingContexts=[];
  for(const [i,invitation] of [code,link].entries()){
   const context=await browser.newContext();landingContexts.push(context);const landing=await context.newPage();await landing.goto(new URL(roomURL).origin);await landing.getByRole('textbox',{name:'Name',exact:true}).fill(`Landing ${i}`);
-  await landing.getByRole('button',{name:'Join game',exact:true}).click();await expect(landing.getByRole('textbox',{name:'Name',exact:true})).toHaveValue(`Landing ${i}`);
-  await landing.getByLabel('Invitation link or room code').fill(invitation);if(i===0)await landing.getByLabel('Invitation link or room code').press('Enter');else await landing.getByRole('button',{name:'Join game',exact:true}).click();await expect(landing).toHaveURL(roomURL);await expect(landing.locator('.seat.own .seat-heading')).toHaveText(`Landing ${i}`);
+  await landing.getByRole('button',{name:'Join',exact:true}).click();await expect(landing.getByRole('textbox',{name:'Name',exact:true})).toHaveValue(`Landing ${i}`);
+  await landing.getByLabel('Invitation link or room code').fill(invitation);if(i===0)await landing.getByLabel('Invitation link or room code').press('Enter');else await landing.getByRole('button',{name:'Join',exact:true}).click();await expect(landing).toHaveURL(roomURL);await expect(landing.locator('.lobby-name').filter({hasText:`Landing ${i}`})).toHaveText(`Landing ${i}`);
  }
- await expect(page.locator('.seat')).toHaveCount(4);await expect(page.locator('.seat.own')).toHaveAttribute('data-seat',hostSeat!);
- await page.goto(link);await expect(page).toHaveURL(roomURL);await expect(page.locator('.seat.own')).toHaveAttribute('data-seat',hostSeat!);await expect(page.getByRole('dialog')).toHaveCount(0);
+ await expect(page.locator('.lobby-players li')).toHaveCount(4);await expect(page.locator(`.lobby-players [data-player="${hostSeat}"] .lobby-name`)).toHaveText('Creator');
+ await page.goto(link);await expect(page).toHaveURL(roomURL);await expect(page.locator(`.lobby-players [data-player="${hostSeat}"] .lobby-name`)).toHaveText('Creator');await expect(page.getByRole('dialog')).toHaveCount(0);
  await guestContext.close();for(const context of landingContexts)await context.close();
 });
 

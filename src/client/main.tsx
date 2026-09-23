@@ -1,16 +1,32 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { io, type Socket } from 'socket.io-client';
 import type { Command, Reply, View } from '../shared/protocol';
 import artwork from '../shared/artwork.json';
 import './style.css';
 import { GameTable } from './GameTable';
+import { Lobby } from './Lobby';
 type Action = Command extends infer C ? C extends Command ? Omit<C,'id'|'game'|'round'> : never : never;
 function Branding(){return <><h1 className="archduke-logo">Archduke</h1><picture className="landing-graphic"><source media="(prefers-reduced-motion: reduce)" srcSet="/graphics/graphic_1-still.png"/><img src="/graphics/graphic_1.gif" width="1200" height="1200" alt=""/></picture></>;}
 function NameField({name,setName}:{name:string;setName:(value:string)=>void}){return <input className="name-field" aria-label="Name" placeholder="Name" autoComplete="nickname" maxLength={24} required value={name} onChange={e=>setName(e.target.value)}/>;}
+// Prime the existing renderer before publishing the initial deal on lobby entry.
+// Refreshes retain its existing snapshot/catch-up policy; subsequent rounds stay mounted.
+function GameplayEntry({animateDeal,...props}:React.ComponentProps<typeof GameTable>&{animateDeal:boolean}){
+ const entry=useRef<HTMLDivElement>(null);
+ const [mounted,setMounted]=useState(!animateDeal);
+ useLayoutEffect(()=>{
+  if(!animateDeal)return;
+  const table=entry.current!.querySelector<HTMLElement>('.game')!;
+  // Let the unchanged table's ResizeObserver establish its actual dimensions
+  // before handing the initial event to its existing motion renderer.
+  const publish=()=>{if(Number(table.dataset.layoutWidth)===table.clientWidth&&Number(table.dataset.layoutHeight)===table.clientHeight){observer.disconnect();setMounted(true);}};
+  const observer=new MutationObserver(publish);observer.observe(table,{attributes:true,attributeFilter:['data-layout-width','data-layout-height']});publish();return()=>observer.disconnect();
+ },[]);
+ return <div ref={entry} style={{display:'contents',visibility:mounted?'visible':'hidden'}}><GameTable {...props} v={mounted?props.v:{...props.v,movements:[]}}/></div>;
+}
 function App(){
  const [room,setRoom]=useState(()=>location.pathname.startsWith('/room/')?location.pathname.split('/')[2]:'');
- const [v,setV]=useState<View>();const [error,setError]=useState('');const [connected,setConnected]=useState(false);const [taken,setTaken]=useState(false);
+ const [v,setV]=useState<View>();const [animateDeal,setAnimateDeal]=useState(false);const [error,setError]=useState('');const [connected,setConnected]=useState(false);const [taken,setTaken]=useState(false);
  const [name,setName]=useState('');const [invite,setInvite]=useState(()=>location.pathname.startsWith('/invite/')?location.pathname.split('/')[2]:'');
  const [directInvite]=useState(()=>location.pathname.startsWith('/invite/'));const [inviteRoom,setInviteRoom]=useState('');
  const [form,setForm]=useState<'create'|'join'>(invite?'join':'create');const [pending,setPending]=useState(0);const [loaded,setLoaded]=useState(false);
@@ -23,7 +39,7 @@ function App(){
   const s=io({autoConnect:false,transports:['websocket'],auth:{room},reconnection:true});socket.current=s;
   const clock=()=>{if(!s.connected)return;const start=Date.now();s.timeout(3000).emit('pingClock',{},(err:Error|null,data:{now:number})=>{if(!err){const end=Date.now();offset.current=data.now-(start+end)/2;}});};
   s.on('connect',()=>{setConnected(true);clock();for(const id of outstanding.current)s.emit('actionStatus',id,(r:Reply|null)=>{if(!r)setError('An earlier action was not committed. Check the table before trying again.');outstanding.current.delete(id);});setPending(0);actionLock.current=false;});
-  s.on('state',(state:View)=>{if(latest.current&&state.seq<latest.current.seq)return;latest.current=state;setNow(Date.now()+offset.current);setV(state);});
+  s.on('state',(state:View)=>{if(latest.current&&state.seq<latest.current.seq)return;if(state.lobby)setAnimateDeal(false);else if(latest.current?.lobby&&state.phase==='INITIAL_PEEK')setAnimateDeal(true);latest.current=state;setNow(Date.now()+offset.current);setV(state);});
   s.on('disconnect',()=>{s.sendBuffer.length=0;setConnected(false);});s.on('connect_error',(e:Error)=>{setError(e.message);if(/no longer|session|Invitation/.test(e.message))s.disconnect();});
   s.on('expired',()=>{setError('This game is no longer available');setV(undefined);s.disconnect();});
   s.on('takenOver',()=>{setTaken(true);setConnected(false);s.disconnect();});
@@ -48,9 +64,10 @@ function App(){
   actionLock.current=true;const command={...action,id:crypto.randomUUID(),game:state.game,round:state.round};outstanding.current.add(command.id);setPending(n=>n+1);setError('');
   s.timeout(5000).emit('command',command,(err:Error|null,r:Reply)=>{actionLock.current=false;setPending(n=>Math.max(0,n-1));if(err){setError('Acknowledgement delayed. Reconnecting will check this action; it will not be replayed.');s.emit('actionStatus',command.id,(reply:Reply|null)=>{if(reply)outstanding.current.delete(command.id);});return;}outstanding.current.delete(command.id);if(!r.ok&&!['WAIT','EARLY','STALE','PAUSED'].includes(r.code))setError(r.message);s.emit('sync');});
  }
- if(!room&&directInvite)return <main className="home" data-room={inviteRoom||undefined}><div className="home-group"><Branding/>{inviteRoom?<form className="entry-form invite-entry" onSubmit={e=>void enter(e,'join')}><NameField name={name} setName={setName}/><button className="primary" disabled={!!pending}>Join game</button>{error&&<p role="alert" className="error">{error}</p>}</form>:<p role="status">{error||'Opening room…'}</p>}</div></main>;
- if(!room)return <main className="home"><div className="home-group"><Branding/><form className="entry-form" onSubmit={e=>void enter(e,(e.nativeEvent as SubmitEvent).submitter?.getAttribute('value')==='join'?'join':'create')}><NameField name={name} setName={setName}/>{form==='join'&&<label>Invitation link or room code<input autoFocus onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();e.currentTarget.form?.requestSubmit(e.currentTarget.form.querySelector<HTMLButtonElement>('button[value="join"]')!);}}} value={invite} onChange={e=>setInvite(e.target.value)} placeholder="Paste a link or enter a code"/></label>}<div className="entry-buttons"><button className="primary" type="submit" value="create" disabled={!!pending}>Start game</button><button type={form==='join'?'submit':'button'} value="join" disabled={!!pending} aria-expanded={form==='join'} onClick={form==='join'?undefined:()=>setForm('join')}>Join game</button></div>{error&&<p role="alert" className="error">{error}</p>}</form></div></main>;
- if(!v)return <main className="loading"><span className="sigil">A</span><h1>{error||'Finding your table…'}</h1><a href="/">Back to home</a></main>;
- return <GameTable v={v} now={now} connected={connected} taken={taken} pending={pending>0} loaded={loaded} error={error} clearError={()=>setError('')} send={send}/>;
+ if(!room&&directInvite)return <main className="home" data-room={inviteRoom||undefined}><div className="home-group"><Branding/>{inviteRoom?<form className="entry-form invite-entry" onSubmit={e=>void enter(e,'join')}><NameField name={name} setName={setName}/><button className="primary" disabled={!!pending}>Join</button>{error&&<p role="alert" className="error">{error}</p>}</form>:<p role="status">{error||'Opening room…'}</p>}</div></main>;
+ if(!room)return <main className="home"><div className="home-group"><Branding/><form className="entry-form" onSubmit={e=>void enter(e,(e.nativeEvent as SubmitEvent).submitter?.getAttribute('value')==='join'?'join':'create')}><NameField name={name} setName={setName}/>{form==='join'&&<label>Invitation link or room code<input autoFocus onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();e.currentTarget.form?.requestSubmit(e.currentTarget.form.querySelector<HTMLButtonElement>('button[value="join"]')!);}}} value={invite} onChange={e=>setInvite(e.target.value)} placeholder="Paste a link or enter a code"/></label>}<div className="entry-buttons"><button className="primary" type="submit" value="create" disabled={!!pending}>Start</button><button type={form==='join'?'submit':'button'} value="join" disabled={!!pending} aria-expanded={form==='join'} onClick={form==='join'?undefined:()=>setForm('join')}>Join</button></div>{error&&<p role="alert" className="error">{error}</p>}</form></div></main>;
+ if(!v)return <main className="loading">{error?<><h1>{error}</h1><a href="/">Back to home</a></>:<h1 role="status">Loading...</h1>}</main>;
+ if(v.lobby)return <Lobby v={v} blocked={!connected||taken||pending>0} loaded={loaded} error={error} send={send}/>;
+ return <GameplayEntry animateDeal={animateDeal} v={v} now={now} connected={connected} taken={taken} pending={pending>0} loaded={loaded} error={error} clearError={()=>setError('')} send={send}/>;
 }
 createRoot(document.getElementById('root')!).render(<App/>);

@@ -8,7 +8,7 @@ import { createApp } from '../src/server/app.js';
 import { config } from '../src/server/config.js';
 import { MemoryStore, SQLiteStore } from '../src/server/store.js';
 import type { View, Reply } from '../src/shared/protocol.js';
-import { assertCards } from '../src/engine/model.js';
+import { assertCards, deck } from '../src/engine/model.js';
 const origin='http://localhost:3000';
 const cfg=()=>config({PUBLIC_ORIGIN:origin,PORT:'0'});
 const running:ReturnType<typeof createApp>[]=[];const sockets:Socket[]=[];const dirs:string[]=[];
@@ -54,7 +54,7 @@ it('resolves private invitations without exposing state and preserves server-iss
  const third=await seat(s.url,g.room,sameName.cookie);expect(third.v.you).not.toBe(host.v.you);expect(third.v.host).toBe(host.v.you);
  expect((await third.send({type:'start'})).ok).toBe(false);expect((await guest.send({type:'start'})).ok).toBe(false);
  for(const p of [host,guest,third])expect((await p.send({type:'ready',ready:true})).ok).toBe(true);
- await waitFor(()=>[host,guest,third].every(p=>p.v.phase==='INITIAL_PEEK'));
+ expect([host,guest,third].every(p=>p.v.lobby?.canStart)).toBe(true);expect((await host.send({type:'start'})).ok).toBe(true);await waitFor(()=>[host,guest,third].every(p=>p.v.phase==='INITIAL_PEEK'));
  const again=await post(s.url,'/api/join',{name:'Changed name',invite:host.v.invite},g.cookies[1]);expect(again.json.room).toBe(g.room);expect(s.rooms.rooms.get(g.room)!.data.state.players).toHaveLength(3);
  expect((await host.send({type:'start'})).ok).toBe(false);
 });
@@ -79,4 +79,18 @@ it('deduplicates multi-card penalties while new intentional retries incur new pe
  const before=p.slots.length,id=crypto.randomUUID(),action={type:'match',window:a.v.window,slots};const reply=await a.send(action,id);expect(reply.results).toEqual(slots.map(()=> 'wrong'));await waitFor(()=>a.v.players.find(p=>p.id===a.v.you)!.slots.length===before+slots.length);expect(await a.send(action,id)).toEqual(reply);expect(a.v.players.find(p=>p.id===a.v.you)!.slots).toHaveLength(before+slots.length);
  expect((await a.send({...action,slots:[slots[0],slots[0]]})).ok).toBe(false);expect(a.v.players.find(p=>p.id===a.v.you)!.slots).toHaveLength(before+slots.length);
  expect((await a.send({...action,slots:[slots[0]]})).code).toBe('PENALTY');await waitFor(()=>a.v.players.find(p=>p.id===a.v.you)!.slots.length===before+slots.length+1);for(const viewer of g.seats)expect(viewer.v.players.find(p=>p.id===a.v.you)!.slots.slice(before).every(s=>s.value===undefined)).toBe(true);
+});
+
+
+it('orders competing socket draws and matches by server receipt, deduplicates retries and converges on all clients',async()=>{
+ const s=await server(),g=await game(s,3),room=s.rooms.rooms.get(g.room)!;
+ await s.rooms.transaction(room,({state:v})=>{const cards=deck(),take=(value:number)=>cards.splice(cards.findIndex(c=>c.value===value),1)[0];v.players.forEach((p,i)=>{p.slots=(i===0?[7,7,2]:[3,4]).map((value,index)=>({rev:1,card:take(value),row:index%2,column:Math.floor(index/2)}));});v.deck=cards;v.discard=[take(7)];v.game=1;v.round=1;v.phase='INTER_TURN';v.window='race';v.open=true;v.next=v.players[1].id;v.seq++;});
+ await waitFor(()=>g.seats.every(p=>p.v.window==='race'));
+ const [matcher,drawer]=g.seats,matchId=crypto.randomUUID(),drawId=crypto.randomUUID();
+ const matching={type:'match',window:'race',slots:[0,1].map(slot=>({player:matcher.v.you,slot,rev:1}))},drawing={type:'draw',source:'discard',window:'race',turn:drawer.v.turn};
+ const received:string[]=[],command=s.rooms.command.bind(s.rooms);s.rooms.command=async(...args)=>{const input=args[3] as {id:string};if(input.id===matchId||input.id===drawId)received.push(input.id);return command(...args);};
+ const [matchReply,drawReply]=await Promise.all([matcher.send(matching,matchId),drawer.send(drawing,drawId)]);expect(matchReply.ok).toBe(true);expect(drawReply.ok).toBe(true);
+ const matchFirst=received[0]===matchId;expect(matchReply.results).toEqual(matchFirst?['matched','matched']:['late','late']);expect(matchFirst?drawReply.seq:matchReply.seq).toBe((matchFirst?matchReply.seq:drawReply.seq)+1);
+ const accepted=structuredClone(room.data.state);expect(await matcher.send(matching,matchId)).toEqual(matchReply);expect(await drawer.send(drawing,drawId)).toEqual(drawReply);expect(room.data.state).toEqual(accepted);
+ await waitFor(()=>g.seats.every(p=>p.v.seq===accepted.seq));for(const p of g.seats){expect(p.v.open).toBe(false);expect(p.v.window).toBe('race');expect(p.v.held?.owner).toBe(drawer.v.you);expect(p.v.players).toEqual(matcher.v.players);expect(p.v.players.flatMap(p=>p.slots).every(slot=>slot.value===undefined)).toBe(true);}assertCards(room.data.state);
 });

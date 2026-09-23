@@ -13,7 +13,7 @@ cp .env.example .env
 npm run dev
 ```
 
-Open **http://localhost:5173**. Enter a display name and click **Start game** to create a room immediately as its host. In the room, use **Invite**. Friends open it directly into a branded name-only **Join game** screen. Returning players reconnect to their existing seat without another name prompt. On the landing page, **Join game** reveals an invitation/code input and reuses the entered name. Set PUBLIC_ORIGIN to exactly the origin browsers use (no trailing slash).
+Open **http://localhost:5173**. After server-code changes, restart `npm run dev`; its server process does not hot-reload. For `npm start` on port 3000, run `npm run build` and restart `npm start` so both client and server use the same build. Enter a display name and click **Start** to create a room immediately as its host. Creation and invitation entry lead to the persistent room lobby. Use **Invite** there. All connected participants click **Ready**, then the host clicks **Start Game** (2–6 players). Friends open it directly into a branded name-only **Join** screen. Returning players reconnect to their existing seat without another name prompt. On the landing page, **Join** reveals an invitation/code input and reuses the entered name. Set PUBLIC_ORIGIN to exactly the origin browsers use (no trailing slash).
 
 Pinned runtime: Node **24.18.1**, an installed Node 24 LTS version. Node 20.15.1 is too old for this Vite build. Node LTS status: [official release schedule](https://nodejs.org/en/about/previous-releases). Build requirements: [Vite guide](https://vite.dev/guide/).
 
@@ -31,7 +31,7 @@ Opponents retain their cyclic order in the top strip. The pending and shared pil
 
 Use separate browser profiles or isolated Playwright contexts for distinct players. Two normal tabs with the same room cookie control the SAME seat: the newest takes over, and the old tab displays a takeover message. Session cookies are HttpOnly and room-scoped. Never put session credentials into an invitation.
 
-Refresh reconnects to your seat. A confirmed disconnect freezes the round; once everyone returns, the round resumes automatically after the short restart delay. Grace is 60 seconds, with no automatic strategic moves. Administrative host passes clockwise if needed. Active games lock admissions.
+Refresh reconnects to your seat. A confirmed disconnect freezes the round; once everyone returns, the round resumes automatically after the short restart delay. Grace is 60 seconds, with no automatic strategic moves. Administrative host passes clockwise if needed. New arrivals during a game wait in the same room’s lobby without joining its active roster or receiving private game state. Active participants reconnect to their existing match. Lobby disconnects reset readiness and hold eligibility for the existing 60-second reconnection grace; after that, disconnected participants wait for the next match. Host **Exit** or the final podium’s **New Game** returns everyone to the same lobby and invite link, with all readiness and match state cleared. Between-round continuation retains the table readiness flow, followed by a synchronized three-second countdown before rounds 2–4. Normal next-player draws race matches in server order without a matching grace delay.
 
 ## Commands
 

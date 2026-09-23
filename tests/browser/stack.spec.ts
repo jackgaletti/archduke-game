@@ -10,7 +10,7 @@ test('real back layers track the deck through one card and empty without moving 
  try{
   const link=await create(page,'http://localhost:3102');const guest=await join(browser,link,'Bea');const pages=[page,guest];await start(pages);await peek(pages);const actor=await nextActor(pages);
   const room=app.rooms.rooms.get(state(actor).room)!;const s=room.data.state;const recipient=s.players.find(p=>p.id!==state(actor).you)!;
-  const target=actor.locator('[data-endpoint=draw]');const before=await target.boundingBox();await expect(actor.locator('.stack-layer')).toHaveCount(7);
+  const target=actor.locator('[data-endpoint=draw]');const before=await target.boundingBox();await expect(actor.locator('.stack-layer')).toHaveCount(9);
   // A test-owned exhausted-deck fixture: move actual cards, preserving the multiset and privacy.
   while(s.deck.length>1){const counts=[0,1].map(row=>recipient.slots.filter(slot=>slot.card&&slot.row===row).length);const row=counts[0]<=counts[1]?0:1;recipient.slots.push({card:s.deck.pop()!,rev:0,row,column:counts[row]});recipient.columns=Math.max(recipient.columns??2,counts[row]+1);}
   s.seq++;room.publish(you=>project(s,app.rooms.deps,you));

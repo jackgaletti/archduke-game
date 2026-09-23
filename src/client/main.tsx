@@ -59,6 +59,18 @@ function App(){
   const key=JSON.stringify([mode,name.trim(),mode==='join'?capability:'']);let id:string=crypto.randomUUID();
   try{const saved=JSON.parse(sessionStorage.getItem('archduke.pending-admission')??'null') as {key?:string;id?:string}|null;if(saved?.key===key&&typeof saved.id==='string')id=saved.id;sessionStorage.setItem('archduke.pending-admission',JSON.stringify({key,id}));}catch{/* Storage may be disabled; the current request still has an ID. */}
   const r=await fetch(`/api/${mode}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,name,...(mode==='join'?{invite:capability}:{})})});const body=await r.json();if(!r.ok)throw new Error(body.message);try{sessionStorage.removeItem('archduke.pending-admission');}catch{/* Optional local retry cache. */}history.pushState({},'',`/room/${body.room}`);setRoom(body.room);}catch(e){setError((e as Error).message);}finally{setPending(0);}}
+ const leaving=useRef(false);
+ async function home(){
+  if(leaving.current||actionLock.current||!v?.lobby)return;
+  leaving.current=true;actionLock.current=true;setPending(n=>n+1);setError('');
+  try{
+   const response=await fetch(`/api/room/${room}/leave`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:crypto.randomUUID()})});
+   const result=await response.json();if(!response.ok)throw new Error(result.message);
+   socket.current?.disconnect();outstanding.current.clear();
+   try{sessionStorage.removeItem('archduke.pending-admission');}catch{/* Optional retry cache. */}
+   location.replace('/');
+  }catch(e){leaving.current=false;actionLock.current=false;setPending(n=>Math.max(0,n-1));setError((e as Error).message);}
+ }
  function send(action:Action){
   if(actionLock.current)return;const s=socket.current;const state=v;if(!s?.connected||!state||taken)return;
   actionLock.current=true;const command={...action,id:crypto.randomUUID(),game:state.game,round:state.round};outstanding.current.add(command.id);setPending(n=>n+1);setError('');
@@ -67,7 +79,7 @@ function App(){
  if(!room&&directInvite)return <main className="home" data-room={inviteRoom||undefined}><div className="home-group"><Branding/>{inviteRoom?<form className="entry-form invite-entry" onSubmit={e=>void enter(e,'join')}><NameField name={name} setName={setName}/><button className="primary" disabled={!!pending}>Join</button>{error&&<p role="alert" className="error">{error}</p>}</form>:<p role="status">{error||'Opening room…'}</p>}</div></main>;
  if(!room)return <main className="home"><div className="home-group"><Branding/><form className="entry-form" onSubmit={e=>void enter(e,(e.nativeEvent as SubmitEvent).submitter?.getAttribute('value')==='join'?'join':'create')}><NameField name={name} setName={setName}/>{form==='join'&&<label>Invitation link or room code<input autoFocus onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();e.currentTarget.form?.requestSubmit(e.currentTarget.form.querySelector<HTMLButtonElement>('button[value="join"]')!);}}} value={invite} onChange={e=>setInvite(e.target.value)} placeholder="Paste a link or enter a code"/></label>}<div className="entry-buttons"><button className="primary" type="submit" value="create" disabled={!!pending}>Start</button><button type={form==='join'?'submit':'button'} value="join" disabled={!!pending} aria-expanded={form==='join'} onClick={form==='join'?undefined:()=>setForm('join')}>Join</button></div>{error&&<p role="alert" className="error">{error}</p>}</form></div></main>;
  if(!v)return <main className="loading">{error?<><h1>{error}</h1><a href="/">Back to home</a></>:<h1 role="status">Loading...</h1>}</main>;
- if(v.lobby)return <Lobby v={v} blocked={!connected||taken||pending>0} loaded={loaded} error={error} send={send}/>;
+ if(v.lobby)return <Lobby v={v} blocked={!connected||taken||pending>0||leaving.current} loaded={loaded} error={error} send={send} onHome={()=>void home()}/>;
  return <GameplayEntry animateDeal={animateDeal} v={v} now={now} connected={connected} taken={taken} pending={pending>0} loaded={loaded} error={error} clearError={()=>setError('')} send={send}/>;
 }
 createRoot(document.getElementById('root')!).render(<App/>);

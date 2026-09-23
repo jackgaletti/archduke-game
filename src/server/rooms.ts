@@ -46,6 +46,28 @@ export class Rooms {
    need(this.rooms.get(room.data.state.room)===room,'This game is no longer available','EXPIRED');const candidate=structuredClone(room.data);const result=fn(candidate);assertCards(candidate.state);candidate.lastActive=this.deps.now();this.store.save(candidate);room.data=candidate;room.publish(you=>project(candidate.state,this.deps,you,this.config.persistence));this.metrics.push(performance.now()-queued);if(this.metrics.length>10000)this.metrics.shift();return result;
   });room.queue=task.catch(()=>{});return task;
  }
+ /** Explicit departure shares the same room queue as admission and Start Game. */
+ async leave(room:Room,seat:string){
+  const task=room.queue.then(()=>{
+   const s=room.data.state;
+   if(![...s.players,...s.waiting??[]].some(p=>p.id===seat))return;
+   need(this.rooms.get(s.room)===room,'This game is no longer available','EXPIRED');
+   need(roomLobby(s)||!!s.waiting?.some(p=>p.id===seat),'Active players cannot leave through the lobby.');
+   const candidate=structuredClone(room.data),next=candidate.state;
+   next.players=next.players.filter(p=>p.id!==seat);next.waiting=next.waiting?.filter(p=>p.id!==seat);
+   if(next.host===seat)next.host=next.players[0]?.id??next.waiting?.[0]?.id??'';
+   delete next.acks[seat];
+   for(const [key,id] of Object.entries(candidate.sessions))if(id===seat)delete candidate.sessions[key];
+   for(const [key,id] of Object.entries(candidate.admissions??{}))if(id===seat)delete candidate.admissions![key];
+   next.seq++;candidate.lastActive=this.deps.now();assertCards(next);
+   const empty=next.players.length+(next.waiting?.length??0)===0;
+   // Persist before revoking controllers or publishing the new roster.
+   if(empty)this.store.remove(next.room);else this.store.save(candidate);
+   room.data=candidate;room.controllers.delete(seat);room.pendingDisconnects.delete(seat);
+   if(empty)this.rooms.delete(next.room);
+   else room.publish(you=>project(next,this.deps,you,this.config.persistence));
+  });room.queue=task.catch(()=>{});return task;
+ }
  async command(room:Room,seat:string,controller:string,input:unknown):Promise<Reply>{
   const parsed=commandSchema.safeParse(input);if(!parsed.success)return {ok:false,code:'MALFORMED',message:'Invalid action format.',seq:room.data.state.seq};
   const c=parsed.data as Command;

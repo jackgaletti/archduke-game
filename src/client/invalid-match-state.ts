@@ -20,7 +20,7 @@ export function visibleHand(player:PublicPlayer,events:InvalidMatch[],now:number
  if(!arrivals.length)return player;
  const pending=new Set(arrivals.map(e=>e.penalty.cardId));
  const slots=player.slots.filter(s=>!s.cardId||!pending.has(s.cardId));
- const columns=Math.max(2,Math.min(player.columns,...arrivals.map(e=>e.penalty.beforeColumns)),...slots.map(s=>s.column+1));
+ const columns=Math.max(2,Math.min(player.columns,...arrivals.map(e=>e.penalty.beforeColumns)),...slots.filter(s=>s.occupied).map(s=>s.column+1));
  return {...player,slots,columns};
 }
 export function invalidFace(events:InvalidMatch[],cardId:string|undefined,now:number){

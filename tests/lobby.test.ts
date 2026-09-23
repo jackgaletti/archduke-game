@@ -95,3 +95,43 @@ describe('persistent room lobby',()=>{
   tick(room.data.state,f.deps);expect(room.data.state.round).toBe(1);
  });
 });
+
+
+describe('explicit lobby departure',()=>{
+ it('removes membership, credentials, ready state, admissions and capacity exactly once',async()=>{
+  const f=await fixture(6);await f.ready();const departing=f.participants[2],host=f.state().host,invite=f.state().invite;let published=0;
+  f.room.publish=make=>{published++;for(const id of f.room.controllers.keys())expect(make(id).lobby!.players.some(p=>p.id===departing.seat)).toBe(false);};
+  await Promise.all([f.rooms.leave(f.room,departing.seat),f.rooms.leave(f.room,departing.seat)]);
+  expect(published).toBe(1);expect(f.state().players).toHaveLength(5);expect(f.state().host).toBe(host);expect(f.state().invite).toBe(invite);expect(f.view().lobby?.canStart).toBe(true);
+  expect(f.rooms.auth(f.room,departing.credential)).toBeUndefined();expect(Object.values(f.room.data.admissions!)).not.toContain(departing.seat);expect(f.room.controllers.has(departing.seat)).toBe(false);
+  await f.rooms.disconnect(f.room,departing.seat,departing.seat);expect(f.state().players).toHaveLength(5);
+  f.room.publish=()=>{};const joined=await f.rooms.join(f.room,'Replacement',crypto.randomUUID());expect(joined.seat).not.toBe(departing.seat);expect(f.view().lobby?.canStart).toBe(false);
+ });
+ it('transfers host to the earliest remaining join without resetting readiness',async()=>{
+  const f=await fixture(3);await f.ready();await f.rooms.leave(f.room,f.participants[0].seat);
+  expect(f.state().host).toBe(f.participants[1].seat);expect(f.view(1).lobby?.canStart).toBe(true);expect(f.state().players.every(p=>p.ready)).toBe(true);
+  expect((await f.send(2,{type:'start'})).ok).toBe(false);expect((await f.send(1,{type:'start'})).ok).toBe(true);
+ });
+ it('serializes leave with Start Game and protects active roster membership',async()=>{
+  const f=await fixture(3);await f.ready();const p=f.participants[2];
+  const [,started]=await Promise.all([f.rooms.leave(f.room,p.seat),f.send(0,{type:'start'})]);expect(started.ok).toBe(true);expect(f.state().players).toHaveLength(2);
+  await expect(f.rooms.leave(f.room,f.participants[0].seat)).rejects.toThrow(/Active players/);
+  const before=structuredClone(f.state()),late=await f.rooms.join(f.room,'Waiting',crypto.randomUUID());await f.rooms.connect(f.room,late.seat,'late');await f.rooms.leave(f.room,late.seat);
+  expect(f.state().players).toEqual(before.players);expect(f.state().deck).toEqual(before.deck);expect(f.state().paused).toBeUndefined();expect(f.state().waiting).toEqual([]);assertCards(f.state());
+ });
+ it('cleans up the final participant and does not mutate membership on persistence failure',async()=>{
+  const f=await fixture(1),save=f.store.save.bind(f.store);f.store.save=()=>{throw new Error('disk failed');};
+  // The last member uses remove, so test failed removal separately.
+  const remove=f.store.remove.bind(f.store);f.store.remove=()=>{throw new Error('disk failed');};
+  await expect(f.rooms.leave(f.room,f.participants[0].seat)).rejects.toThrow('disk failed');expect(f.state().players).toHaveLength(1);expect(f.room.controllers.size).toBe(1);
+  f.store.save=save;f.store.remove=remove;await f.rooms.leave(f.room,f.participants[0].seat);expect(f.rooms.rooms.size).toBe(0);expect(f.room.controllers.size).toBe(0);await f.rooms.leave(f.room,f.participants[0].seat);
+ });
+});
+
+it('unready departure opens Start without resetting survivors, and failed saves publish nothing',async()=>{
+ const f=await fixture(3);await f.send(0,{type:'ready',ready:true});await f.send(1,{type:'ready',ready:true});expect(f.view().lobby?.canStart).toBe(false);
+ const before=structuredClone(f.room.data),save=f.store.save.bind(f.store);let published=0;f.room.publish=()=>published++;
+ f.store.save=()=>{throw new Error('disk failed');};await expect(f.rooms.leave(f.room,f.participants[2].seat)).rejects.toThrow('disk failed');
+ expect(f.room.data).toEqual(before);expect(f.room.controllers.size).toBe(3);expect(published).toBe(0);
+ f.store.save=save;await f.rooms.leave(f.room,f.participants[2].seat);expect(published).toBe(1);expect(f.view().lobby?.canStart).toBe(true);
+});

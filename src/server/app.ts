@@ -28,6 +28,20 @@ export function createApp(config:Config,store?:Store,dependencies?:Dependencies)
  app.get('/api/invite/:invite',(req,res)=>{const room=rooms.findInvite(req.params.invite);if(!room){res.status(404).json({message:'This game is no longer available'});return;}res.json({room:room.data.state.room,authenticated:!!rooms.auth(room,cookie(req.headers.cookie,room.data.state.room))});});
  app.get('/api/room/:room',(req,res)=>{const room=rooms.rooms.get(req.params.room);if(!room){res.status(404).json({message:'This game is no longer available'});return;}if(!rooms.auth(room,cookie(req.headers.cookie,req.params.room))){res.status(403).json({message:'Use your invitation to join this room.'});return;}res.json({room:req.params.room});});
  const io=new Server(http,{transports:['websocket'],maxHttpBufferSize:16384,allowRequest:(req,done)=>done(null,req.headers.origin===config.origin)});
+ app.post('/api/room/:room/leave',async(req,res)=>{
+  const input=z.object({id:z.string().uuid()}).strict().safeParse(req.body);
+  if(!input.success){res.status(400).json({message:'Invalid leave request.'});return;}
+  const room=rooms.rooms.get(req.params.room);
+  const clear=()=>res.clearCookie(`ad_${req.params.room}`,{httpOnly:true,secure:config.production,sameSite:'strict',path:'/'});
+  // Retrying a completed departure is a harmless no-op, including an empty room.
+  const seat=room&&rooms.auth(room,cookie(req.headers.cookie,req.params.room));
+  if(!room||!seat){clear();res.json({ok:true});return;}
+  try{
+   await rooms.leave(room,seat);
+   for(const client of io.sockets.sockets.values())if(client.data.room===room&&client.data.seat===seat)client.disconnect(true);
+   clear();res.json({ok:true});
+  }catch(e){res.status(400).json({message:e instanceof RuleError?e.message:'Could not leave the room. Try again.'});}
+ });
  io.use((socket,next)=>{const id=socket.handshake.auth.room;if(typeof id!=='string'){next(new Error('Invalid room'));return;}const room=rooms.rooms.get(id);if(!room){next(new Error('This game is no longer available'));return;}const seat=rooms.auth(room,cookie(socket.request.headers.cookie,id));if(!seat){next(new Error('Invitation/session required'));return;}socket.data.room=room;socket.data.seat=seat;next();});
  io.on('connection',socket=>{
   const room=socket.data.room as ReturnType<Rooms['findInvite']> & {};const seat=socket.data.seat as string;
@@ -37,7 +51,7 @@ export function createApp(config:Config,store?:Store,dependencies?:Dependencies)
   const connected=rooms.connect(room,seat,socket.id).then(()=>{if(previous){const old=io.sockets.sockets.get(previous);old?.emit('takenOver');old?.disconnect(true);}socket.emit('state',project(room.data.state,rooms.deps,seat,config.persistence));}).catch(()=>socket.disconnect(true));
   let count=0;let until=Date.now()+1000;
   socket.on('command',async(input,ack)=>{await connected;if(typeof ack!=='function')return;if(Date.now()>until){until=Date.now()+1000;count=0;}if(++count>80){ack({ok:false,code:'RATE_LIMIT',message:'Too many actions. Slow down.',seq:room.data.state.seq});return;}ack(await rooms.command(room,seat,socket.id,input));});
-  socket.on('sync',async()=>{await connected;socket.emit('state',project(room.data.state,rooms.deps,seat,config.persistence));});
+  socket.on('sync',async()=>{await connected;if(room.controllers.get(seat)===socket.id)socket.emit('state',project(room.data.state,rooms.deps,seat,config.persistence));});
   socket.on('pingClock',(_input,ack)=>{if(typeof ack==='function')ack({now:rooms.deps.now()});});
   socket.on('actionStatus',(id,ack)=>{if(typeof id==='string'&&typeof ack==='function')ack(Object.hasOwn(room.data.state.acks[seat]??{},id)?room.data.state.acks[seat][id]:null);});
   socket.on('disconnect',()=>{void connected.then(()=>rooms.disconnect(room,seat,socket.id)).catch(()=>{});});

@@ -1,3 +1,4 @@
+import { normalizeRows, reflowAfterRemoval, addToHand } from './hand.js';
 import { MAX_PLAYERS, playerCountSchema } from '../shared/protocol.js';
 import type { Command, Target, Reply, View, Result } from '../shared/protocol.js';
 import { type State, type Dependencies, type Card, type Player, type Slot, need, deck, shuffle, matches, occupied, sum, newPlayer, createState } from './model.js';
@@ -31,13 +32,11 @@ function supply(s:State,d:Dependencies,normalDraw=false):Card|undefined{
  return card;
 }
 const available=(s:State)=>s.deck.length+(s.reshuffling?.cards.length??0)+Math.max(0,s.discard.length-1);
-function normalizeRows(p:Player){p.slots.forEach((slot,i)=>{slot.row??=i%2;slot.column??=Math.floor(i/2);});p.columns=Math.max(p.columns??2,...p.slots.map(s=>(s.column??0)+1));}
-function append(s:State,d:Dependencies,p:Player,c:Card,kind:string,animate=true){normalizeRows(p);const counts=[0,1].map(row=>p.slots.filter(s=>s.card&&s.row===row).length);const row=counts[0]<=counts[1]?0:1,index=p.slots.length;p.slots.push({rev:1,card:c,row,column:counts[row]});p.columns=Math.max(p.columns!,counts[row]+1);if(animate)movement(s,d,kind,'draw',endpoint(p.id,index));}
-function closeRow(p:Player,row:number){let column=0;for(const slot of p.slots)if(slot.card&&slot.row===row)slot.column=column++;}
+function append(s:State,d:Dependencies,p:Player,c:Card,kind:string,animate=true){const index=p.slots.length;addToHand(p,{rev:1,card:c});if(animate)movement(s,d,kind,'draw',endpoint(p.id,index));}
 function remembers(p:Player,c:Card){return (p.seen??=[]).includes(c.id);}
 function remember(p:Player,c:Card){if(![11,12].includes(c.value)||remembers(p,c))return;p.seen!.push(c.id);}
 function forget(p:Player,c:Card){p.seen=(p.seen??[]).filter(id=>id!==c.id);}
-function matchKnown(s:State,d:Dependencies,p:Player,t:Target,v:Slot){normalizeRows(p);const card=v.card!;forget(p,card);v.card=undefined;v.rev++;closeRow(p,v.row!);s.discard.push(card);movement(s,d,'match',endpoint(p.id,t.slot),'discard',card.value,undefined,undefined,s.discard.at(-2)?.value);if(!occupied(p)){endRound(s,d);return;}effect(s,p.id,card.value);}
+function matchKnown(s:State,d:Dependencies,p:Player,t:Target,v:Slot){normalizeRows(p);const overflow=occupied(p)>4;const card=v.card!;forget(p,card);v.card=undefined;v.rev++;if(overflow)reflowAfterRemoval(p,v.row!);s.discard.push(card);movement(s,d,'match',endpoint(p.id,t.slot),'discard',card.value,undefined,undefined,s.discard.at(-2)?.value);if(!occupied(p)){endRound(s,d);return;}effect(s,p.id,card.value);}
 
 function blockSupply(s:State,d:Dependencies){pause(s,d,'No cards available');s.open=false;log(s,'No cards available. Host may redeal this round without awarding placements.');}
 function penalty(s:State,d:Dependencies,p:Player,t:Target){
@@ -122,7 +121,7 @@ function maybeBeginReadyRound(s:State,d:Dependencies){
 function prepareNextRound(s:State,d:Dependencies){
  s.reshufflePending=undefined;s.reshuffling=undefined;s.pendingMatch=undefined;s.ranking=undefined;
  s.phase='LOBBY';s.betweenRounds=true;s.deck=deck();s.discard=[];s.held=undefined;s.caller=undefined;s.lastTurn=undefined;s.finalTurns=[];s.finalEndsAt=undefined;s.effects=[];s.movements=[];s.reveals=[];s.next='';s.open=false;
- for(const p of s.players){p.slots=[];p.reviewingResults=false;p.viewingLeaderboard=false;p.initial=undefined;p.initialOpen=[];p.seen=[];p.hidden=false;}
+ for(const p of s.players){p.slots=[];p.columns=2;p.reviewingResults=false;p.viewingLeaderboard=false;p.initial=undefined;p.initialOpen=[];p.seen=[];p.hidden=false;}
  maybeBeginReadyRound(s,d);
 }
 function rank(s:State,d:Dependencies):Result[]|undefined{

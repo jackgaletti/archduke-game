@@ -10,7 +10,9 @@ async function setup(page:Page,browser:Browser,count=2,reduced=false){
  for(const p of pages){await p.clock.install({time:now-1000});await p.clock.pauseAt(now);await p.emulateMedia({reducedMotion:reduced?'reduce':'no-preference'});await p.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));}
  async function advance(ms:number){now+=ms;await app.rooms.timers();await Promise.all(pages.map(p=>p.clock.runFor(ms)));for(const p of pages){await p.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));await expect.poll(()=>state(p).serverNow).toBe(now);}}
  await app.rooms.transaction(room,({state:s})=>{const cards=deck();s.players.forEach(p=>{p.slots=Array.from({length:4},(_,i)=>({card:cards.pop()!,rev:1,row:i%2,column:Math.floor(i/2)}));p.columns=2;});s.game=1;s.round=1;s.phase='INTER_TURN';s.open=true;s.window='window';s.next=s.players[1].id;s.discard=[cards.pop()!];s.deck=cards;s.effects=[{id:'peek-1',actor:s.players[0].id,kind:12}];s.seq++;});
- await expect(page.locator('.opponent [data-slot]')).toHaveCount((count-1)*4);await advance(500);
+ await expect(page.locator('.opponent [data-slot]')).toHaveCount((count-1)*4);await expect(page.locator('.game')).toHaveAttribute('data-layout-width',String(page.viewportSize()!.width));await advance(500);
+ // Capture source bounds after the initial responsive placement has settled.
+ await expect.poll(()=>page.locator('.card-grid>.card').evaluateAll(cards=>cards.every(card=>!card.getAnimations().some(a=>a instanceof CSSTransition&&a.transitionProperty==='transform'&&a.playState==='running')))).toBe(true);
  const target=()=>page.locator(`.opponent[data-seat="${state(pages[1]).you}"] [data-slot="2"]`);
  const add=async(id:string)=>{await app.rooms.transaction(room,({state:s})=>{s.effects=[{id,actor:s.players[0].id,kind:12}];s.seq++;});await expect.poll(()=>state(page).effects[0]?.id).toBe(id);};
  return {app,room,pages,target,advance,add,now:()=>now,close:async()=>{for(const p of pages.slice(1))await p.context().close();await app.close();}};

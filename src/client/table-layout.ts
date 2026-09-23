@@ -1,7 +1,12 @@
+/** Two-card rows retain their base spacing even beside a longer overflow row. */
+export function rowStep(card:number,gap:number,width:number,slots:{occupied:boolean;row:number;column:number}[],row:number){
+ const columns=Math.max(2,...slots.filter(s=>s.occupied&&s.row===row).map(s=>s.column+1));
+ return columns===2?card+gap:(width-card)/(columns-1);
+}
 export function relativePlayers<T extends {id:string}>(players:T[],you:string):T[]{
  const index=players.findIndex(p=>p.id===you);return index<0?players:[...players.slice(index),...players.slice(0,index)];
 }
-/** Historical column capacity stays fixed as rows close gaps; own-hand expansion happens once. */
+/** Current occupied formation determines spacing; base holes retain the full 2×2 footprint. */
 export function handGeometry(card:number,gap:number,slots:number,expansion=1){
  const columns=Math.max(2,Math.ceil(slots/2));const width=(card*2+gap)*(slots>4?expansion:1);
  return {columns,width,height:card*2.8+gap,step:(width-card)/(columns-1)};

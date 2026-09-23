@@ -94,3 +94,20 @@ it('orders competing socket draws and matches by server receipt, deduplicates re
  const accepted=structuredClone(room.data.state);expect(await matcher.send(matching,matchId)).toEqual(matchReply);expect(await drawer.send(drawing,drawId)).toEqual(drawReply);expect(room.data.state).toEqual(accepted);
  await waitFor(()=>g.seats.every(p=>p.v.seq===accepted.seq));for(const p of g.seats){expect(p.v.open).toBe(false);expect(p.v.window).toBe('race');expect(p.v.held?.owner).toBe(drawer.v.you);expect(p.v.players).toEqual(matcher.v.players);expect(p.v.players.flatMap(p=>p.slots).every(slot=>slot.value===undefined)).toBe(true);}assertCards(room.data.state);
 });
+
+
+it('Home leaves through authenticated HTTP, revokes sockets/cookies and broadcasts host transfer',async()=>{
+ const s=await server(),g=await game(s,3),room=s.rooms.rooms.get(g.room)!;const [host,guest,third]=g.seats;
+ for(const player of g.seats)await player.send({type:'ready',ready:true});
+ const path=`/api/room/${g.room}/leave`,invite=host.v.invite;
+ expect((await post(s.url,path,{player:third.v.you},g.cookies[0])).status).toBe(400);
+ const left=await post(s.url,path,{},g.cookies[0]);expect(left.status).toBe(200);expect(left.cookie).toBe(`ad_${g.room}=`);
+ await waitFor(()=>!host.socket.connected&&guest.v.host===guest.v.you&&third.v.players.length===2);
+ expect(guest.v.lobby?.canStart).toBe(true);expect(guest.v.players.every(p=>p.ready)).toBe(true);expect(room.data.state.invite).toBe(invite);
+ expect((await fetch(s.url+`/api/room/${g.room}`,{headers:{Cookie:g.cookies[0]}})).status).toBe(403);
+ expect((await post(s.url,path,{},g.cookies[0])).status).toBe(200);expect(room.data.state.players).toHaveLength(2);
+ expect((await guest.send({type:'start'})).ok).toBe(true);expect((await post(s.url,path,{},g.cookies[1])).status).toBe(400);
+ const newcomer=await post(s.url,'/api/join',{name:'Late',invite}),late=await seat(s.url,g.room,newcomer.cookie);expect(late.v.lobby?.inProgress).toBe(true);
+ const active=structuredClone(room.data.state.players);expect((await post(s.url,path,{},newcomer.cookie)).status).toBe(200);await waitFor(()=>!late.socket.connected);
+ expect(room.data.state.players).toEqual(active);expect(room.data.state.waiting).toEqual([]);expect(room.data.state.paused).toBeUndefined();
+});

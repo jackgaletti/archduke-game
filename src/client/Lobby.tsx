@@ -2,10 +2,10 @@ import type { Command, View } from '../shared/protocol';
 import { Invite } from './GameTable';
 import './lobby.css';
 type Action=Command extends infer C?C extends Command?Omit<C,'id'|'game'|'round'>:never:never;
-export function Lobby({v,blocked,loaded,error,send}:{v:View;blocked:boolean;loaded:boolean;error:string;send:(a:Action)=>void}){
+export function Lobby({v,blocked,loaded,error,send,onHome}:{v:View;blocked:boolean;loaded:boolean;error:string;send:(a:Action)=>void;onHome:()=>void}){
  const lobby=v.lobby!,me=lobby.players.find(p=>p.id===v.you)!;
  return <main className="room-lobby" data-phase="LOBBY">
-  <header className="game-header"><span/><h1 className="lobby-wordmark">ARCHDUKE</h1><Invite token={v.invite}/></header>
+  <header className="game-header"><div className="invite-control lobby-home"><button disabled={blocked} onClick={onHome}>Home</button></div><h1 className="lobby-wordmark">ARCHDUKE</h1><Invite token={v.invite}/></header>
   <div className="lobby-center">
    {lobby.inProgress&&<p className="lobby-progress" role="status">Game in progress</p>}
    <ul className="lobby-players" aria-label="Players">{lobby.players.map(p=><li key={p.id} data-player={p.id} data-ready={p.ready}>

@@ -80,6 +80,8 @@ for(const scenario of ['top-left','bottom-left','bottom-longer'] as const)test(`
   const rowIds=()=>[0,1].map(row=>state(page).players[0].slots.filter(s=>s.occupied&&s.row===row).sort((a,b)=>a.column-b.column).map(s=>s.index));
   const expected=scenario==='top-left'?[[2,4],[1,3]]:scenario==='bottom-left'?[[0,2],[3,4]]:[[0,3],[1,2]];
   const removed=scenario==='top-left'?0:scenario==='bottom-left'?1:4;
+  // The positioning poll allows subpixel error; finish setup reflow before capturing exact stable-row bounds.
+  await page.locator('.own .card-grid').evaluate(async grid=>{await Promise.all(grid.getAnimations({subtree:true}).filter(a=>a instanceof CSSTransition&&a.transitionProperty==='transform').map(a=>a.finished.catch(()=>undefined)));});
   const bottoms=await page.locator('.own [data-row="1"]:not(.hole)').evaluateAll(els=>els.map(el=>({id:(el as HTMLElement).dataset.slot,x:el.getBoundingClientRect().x,y:el.getBoundingClientRect().y})));
   await page.locator(`.own [data-slot="${removed}"]`).click({position:{x:10,y:20}});await expect.poll(rowIds).toEqual(expected);await page.mouse.move(0,0);await f.advance(600);
   for(const p of f.pages){

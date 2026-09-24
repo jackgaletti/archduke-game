@@ -6,6 +6,7 @@ import { InvalidMatchQueue, visibleHand, invalidFace } from './invalid-match-sta
 import { InvalidMatchMotion } from './invalid-match';
 import { OpponentPeekOverlay, type PeekHandle } from './opponent-peek';
 import { opponentPeek } from './opponent-peek-layout';
+import { GiveTarget } from './give-target';
 import { InitialFace } from './initial-face';
 import artwork from '../shared/artwork.json';
 import { CallBurst } from './call-burst';
@@ -34,12 +35,15 @@ export function GameTable({v,now,connected,taken,pending,loaded,error,clearError
  const peekOverlay=useRef<PeekHandle>(null);const liftedPeek=opponentPeek(v);
  const host=v.host===v.you;const effect=v.effects[0];const ownEffect=effect?.actor===v.you;const selected=ownEffect&&effect.kind===11?effect.targets??[]:[];const held=v.held?.owner===v.you;
  const paused=!!v.paused||!connected||taken||!!v.incompatible;const blocked=paused||pending||!!v.reshuffling||now<v.restartAt;const settled=now>=v.visualUntil;
+ useEffect(()=>{if(blocked||!ownEffect||effect?.kind!==1)setGiveHover(undefined);},[blocked,ownEffect,effect?.kind]);
  const canDraw=!blocked&&!v.effects.length&&now>=v.restartAt&&v.phase==='INTER_TURN'&&v.open&&v.next===v.you;
  const pendingDiscardMovement=v.movements.filter(m=>m.to==='discard'&&m.end+(m.kind==='discard'?120:0)>now).sort((a,b)=>a.start-b.start)[0];
  const displayedDiscard=lobby?undefined:v.discard;const displayedDiscardTop=pendingDiscardMovement?pendingDiscardMovement.under:displayedDiscard;const displayedDrawCount=v.drawCount;
 
  const invalidQueue=useRef(new InvalidMatchQueue());const invalidScope=`${v.room}:${v.game}`;invalidQueue.current.accept(invalidScope,v.invalidMatches??[],now);const invalidEvents=invalidQueue.current.events();
  const activePlayer=v.held?.owner??v.next;const players=relativePlayers(v.players.map(p=>visibleHand(p,invalidEvents,now)),v.you);const layout=playLayout(size.width,size.height,players.length-1);
+ // Keep the name's center over its hand even where the existing table extends past a viewport edge.
+ useLayoutEffect(()=>{surface.current?.querySelectorAll<HTMLElement>('.seat-heading').forEach(heading=>{const r=heading.getBoundingClientRect(),center=r.x+r.width/2;heading.style.setProperty('--name-width',`${Math.max(0,Math.min(r.width,2*(center-3),2*(innerWidth-3-center)))}px`);});},[size.width,size.height,players.length,me.columns,lobby]);
  const title=(id?:string)=>v.players.find(p=>p.id===id)?.name??'';
  const effectLabel=(kind:1|11|12)=>kind===1?'Give':kind===11?'Swap':'Peek';
  function cardClick(t:Target){
@@ -65,7 +69,7 @@ export function GameTable({v,now,connected,taken,pending,loaded,error,clearError
  const standing=last?.map(r=>({...r,points:pointsFor(r.player)})).sort((a,b)=>v.round===4?a.points-b.points||a.place-b.place:a.place-b.place).map((r,i,rows)=>({...r,overallPlace:rows.findIndex(row=>row.points===r.points)+1}));
  const finalCount=v.phase==='FINAL_MATCH_WINDOW'&&v.finalEndsAt!==undefined?Math.min(3,Math.max(1,Math.ceil((v.finalEndsAt-(v.paused?.since??v.reshuffling?.start??now))/1000))):undefined;
  const roundCount=v.roundStartsAt!==undefined?Math.min(3,Math.max(1,Math.ceil((v.roundStartsAt-(v.paused?.since??Math.max(now,v.restartAt)))/1000))):undefined;
- const displayedRound=lobby&&v.round===4?1:Math.max(1,v.round);
+ const displayedRound=lobby?(v.round===4?1:Math.max(1,v.round+1)):Math.max(1,v.round);
  function invalidDestination(event:InvalidMatch){
   const owner=v.players.find(p=>p.slots.some(s=>s.cardId===event.penalty.cardId));if(!owner)return;const future=visibleHand(owner,invalidEvents,event.end);const slot=future.slots.find(s=>s.cardId===event.penalty.cardId);if(!slot)return;
   const own=owner.id===v.you,card=own?layout.card:layout.opponentCard,gap=own?layout.gap:5;const geometry=handGeometry(card,gap,future.columns*2,own?layout.expansion:1);const step=rowStep(card,gap,geometry.width,future.slots,slot.row);
@@ -74,16 +78,17 @@ export function GameTable({v,now,connected,taken,pending,loaded,error,clearError
  }
  const inspectionPlayer=players.find(p=>p.id===inspection?.player);const inspectionSlot=inspectionPlayer?.slots.find(s=>s.index===inspection?.slot);
  function renderSeat(p:View['players'][number],index:number){
-  const own=p.id===v.you;const giving=ownEffect&&effect.kind===1&&settled&&!blocked&&p.id!==v.you&&p.id!==v.caller;
+  const own=p.id===v.you;const giving=ownEffect&&effect.kind===1&&settled&&!blocked&&!lobby&&!results&&p.connected&&p.id!==v.you&&p.id!==v.caller;
   const card=own?layout.card:layout.opponentCard,gap=own?layout.gap:5;const geometry=handGeometry(card,gap,p.columns*2,own?layout.expansion:1);geometry.columns=p.columns;geometry.step=(geometry.width-card)/(Math.max(2,p.columns)-1);
   const ownPending=v.held?.owner===p.id;const isTurn=p.id===activePlayer&&!lobby&&!results&&v.phase!=='INITIAL_PEEK';
   const pendingCard=<button className={`card pending-card ${ownPending?'occupied':''}`} data-endpoint={`held:${p.id}`} data-held-id={ownPending?v.held?.id:undefined} title={ownPending&&own&&v.held?.source==='draw'?'Discard drawn card':undefined} aria-label={ownPending?own&&v.held?.source==='draw'?'Discard drawn card':`${p.name} pending card${own?' — replace an occupied slot':''}`:'Pending card area'} disabled={!ownPending||!own||v.held?.source!=='draw'||blocked||!settled} onClick={()=>send({type:'resolveDraw',turn:v.turn})}>{ownPending&&<CardFace value={v.held?.value}/>}</button>;
   return <section key={p.id} className={`seat ${own?'own':'opponent'} ${isTurn?'turn-seat':''} ${effect?.target?.player===p.id?'effect-target':''}`} data-seat={p.id} data-relative={index} style={{'--card-width':`${card}px`,'--card-gap':`${gap}px`,'--hand-width':`${geometry.width}px`,'--hand-height':`${geometry.height}px`} as CSSProperties}>
-   <div className={`seat-heading ${!lobby&&p.id===v.caller?'caller-name':''}`}><div className="name-mark"><span className="turn-triangle" aria-hidden="true"/>{giving?<button className="give-target" data-hovered={giveHover===p.id} disabled={blocked||!settled} onPointerMove={()=>setGiveHover(p.id)} onPointerLeave={()=>setGiveHover(undefined)} onBlur={()=>setGiveHover(undefined)} onClick={()=>send({type:'effect',effect:effect.id,recipient:p.id})} aria-label={`Give to ${p.name}`}>{p.name}</button>:<span title={p.name}>{p.name}</span>}{lobby&&p.ready&&<span className="ready-check" aria-label="Ready">✓</span>}</div></div>
+   <div className={`seat-heading ${!lobby&&p.id===v.caller?'caller-name':''}`}><div className="name-mark"><span className="turn-triangle" aria-hidden="true"/>{giving?<button className="give-target player-name" data-hovered={giveHover===p.id} tabIndex={-1} aria-hidden="true">{p.name}</button>:<span className="player-name" title={p.name}>{p.name}</span>}{lobby&&p.ready&&<span className="ready-check" aria-label="Ready">✓</span>}</div></div>
    {lobby?<div className="waiting-hand"><div className="card-grid">{[0,1,2,3].map(i=><div key={i} className="card waiting-slot" style={{'--slot-x':`${Math.floor(i/2)*(card+gap)}px`,'--slot-y':`${i%2*(card*1.4+gap)}px`} as CSSProperties}/>)}</div>{own&&!me.ready&&<button className="ready-button primary ready-control" disabled={!loaded||blocked} onClick={()=>send({type:'ready',ready:true})}>Ready</button>}</div>:<div className="hand"><div className="card-grid">{p.slots.map(slot=>{
     const isSelected=selected.some(t=>t.player===p.id&&t.slot===slot.index&&t.rev===slot.rev);const target=effect?.target?.player===p.id&&effect.target.slot===slot.index;const displayValue=slot.value??invalidFace(invalidEvents,slot.cardId,now)?.attempted.value;
     return <button key={slot.index} className={`card ${slot.occupied?'':'hole'} ${isSelected?'selected':''} ${target?'peek-target':''} ${displayValue!==undefined?'revealed':''}`} style={{'--slot-x':`${slot.column*rowStep(card,gap,geometry.width,p.slots,slot.row)}px`,'--slot-y':`${slot.row*(card*1.4+gap)}px`,'--layer':slot.column+1} as CSSProperties} data-endpoint={`${p.id}:${slot.index}`} data-card-id={slot.cardId} data-slot={slot.index} data-row={slot.row} data-column={slot.column} disabled={!allowed(p,slot)} onClick={()=>cardClick({player:p.id,slot:slot.index,rev:slot.rev})} aria-label={`${p.name} slot ${slot.index+1}${displayValue!==undefined?`, card ${displayValue}`:slot.occupied?', face down':', empty'}`} aria-pressed={isSelected}>{slot.occupied&&(own&&v.initialPeek&&[1,3].includes(slot.index)?<InitialFace value={displayValue} timing={v.initialPeek} now={v.paused?.since??now} paused={!!v.paused}/>:<CardFace value={liftedPeek?.cardId===slot.cardId&&liftedPeek!==undefined?undefined:displayValue}/>)}</button>;
    })}</div>{!own&&pendingCard}</div>}
+   {giving&&<GiveTarget key={effect.id} name={p.name} onHover={active=>setGiveHover(active?p.id:undefined)} onSelect={()=>send({type:'effect',effect:effect.id,recipient:p.id})}/>}
    {own&&<div className="own-pending-zone">{pendingCard}</div>}
   </section>;
  }

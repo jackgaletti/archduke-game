@@ -82,4 +82,6 @@ function App(){
  if(v.lobby)return <Lobby v={v} blocked={!connected||taken||pending>0||leaving.current} loaded={loaded} error={error} send={send} onHome={()=>void home()}/>;
  return <GameplayEntry animateDeal={animateDeal} v={v} now={now} connected={connected} taken={taken} pending={pending>0} loaded={loaded} error={error} clearError={()=>setError('')} send={send}/>;
 }
-createRoot(document.getElementById('root')!).render(<App/>);
+// Both unicode subsets must be loaded before the first text is painted.
+// A failed font request still leaves the application usable.
+void document.fonts.load('400 16px "Dela Gothic One"','ARCHDUKE Name Start Join').catch(()=>undefined).then(()=>{createRoot(document.getElementById('root')!).render(<App/>);});

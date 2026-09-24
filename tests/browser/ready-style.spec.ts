@@ -49,7 +49,7 @@ test('rounds 2–4 share lobby Ready styling and remove it only after one accept
   for(const round of [2,3,4]){
    // A committed between-round fixture keeps the other player unready; no deals or timers are bypassed in application code.
    await app.rooms.transaction(room,({state:s})=>{s.game=1;s.round=round-1;s.phase='LOBBY';s.betweenRounds=true;s.deck=deck();s.discard=[];s.players.forEach(p=>{p.ready=false;p.slots=[];p.reviewingResults=false;p.viewingLeaderboard=false;});s.seq++;});
-   await expect(page.locator('.game')).toHaveAttribute('data-phase','LOBBY');await expect(page.locator('.round-label')).toHaveText(`Round ${round-1} / 4`);
+   await expect(page.locator('.game')).toHaveAttribute('data-phase','LOBBY');await expect(page.locator('.round-label')).toHaveText(`Round ${round} / 4`);
    await expect(ready).toBeEnabled();await expect(ready).toHaveText('Ready');await expect(ready).toHaveCSS('text-transform','none');await expect(page.locator('.opponent .ready-button')).toHaveCount(0);
    await page.mouse.move(0,0);await expect(ready).toHaveCSS('background-color','rgb(27, 30, 67)');expect(await appearance(ready)).toEqual(lobbyStyle);expect((await ready.boundingBox())!.width).toBeLessThan(lobbyWidth);
    await ready.hover();await expect(ready).toHaveCSS('background-color','rgb(48, 52, 94)');expect(await appearance(ready)).toEqual(hovered);await page.mouse.move(0,0);

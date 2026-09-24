@@ -27,8 +27,9 @@ async function inkFits(name:Locator,page:Page){
   // Match normal long-name ellipsis while retaining the full accessible name.
   if(ctx.measureText(text).width>available){while(text&&ctx.measureText(text+'…').width>available)text=text.slice(0,-1);text+='…';}
   const m=ctx.measureText(text),baseline=top+(line-m.fontBoundingBoxAscent-m.fontBoundingBoxDescent)/2+m.fontBoundingBoxAscent;
-  return {truncated,left:left-m.actualBoundingBoxLeft-.5,right:left+m.actualBoundingBoxRight+.5,top:baseline-m.actualBoundingBoxAscent-.5,bottom:baseline+m.actualBoundingBoxDescent+.5,width:r.width,height:r.height,x:r.x,y:r.y,viewportWidth:innerWidth,viewportHeight:innerHeight};
+  return {paddingLeft:left,paddingRight:right,truncated,left:left-m.actualBoundingBoxLeft-.5,right:left+m.actualBoundingBoxRight+.5,top:baseline-m.actualBoundingBoxAscent-.5,bottom:baseline+m.actualBoundingBoxDescent+.5,width:r.width,height:r.height,x:r.x,y:r.y,viewportWidth:innerWidth,viewportHeight:innerHeight};
  });
+ expect(ink.paddingLeft).toBeGreaterThanOrEqual(4);expect(ink.paddingRight).toBeGreaterThanOrEqual(4);
  expect(ink.left).toBeGreaterThanOrEqual(1);expect(ink.top).toBeGreaterThanOrEqual(1);expect(ink.right).toBeLessThanOrEqual(ink.width-1);expect(ink.bottom).toBeLessThanOrEqual(ink.height-1);
  expect(ink.x+ink.left).toBeGreaterThanOrEqual(0);expect(ink.x+ink.right).toBeLessThanOrEqual(ink.viewportWidth);expect(ink.y+ink.top).toBeGreaterThanOrEqual(0);expect(ink.y+ink.bottom).toBeLessThanOrEqual(ink.viewportHeight);
  if(!ink.truncated){

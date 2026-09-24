@@ -109,8 +109,11 @@ h2{font-family:'Dela Gothic One',cursive;font-weight:400}.results h2{font-size:c
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
 
 .name-mark{--status-space:20px;position:relative;display:flex;align-items:center;gap:6px;max-width:calc(var(--name-width,100%) - 2 * var(--status-space));min-width:0;overflow:visible}.name-mark>button{font:inherit;border:0;padding:0;min-height:30px}
-/* Symmetric transparent gutters protect glyph overhangs and descenders inside ellipsis clipping. */
-.name-mark>.player-name{display:block;min-width:0;padding:.12em .2em;line-height:1.5;overflow:hidden;text-overflow:ellipsis}
+/* The 4px minimum also protects small lowercase j overhangs in Linux Chromium. */
+.name-mark>.player-name{display:block;min-width:0;padding:.12em max(.2em,4px);line-height:1.5;overflow:hidden;text-overflow:ellipsis}
+/* A zero-offset blur follows the rendered glyphs, outside their ellipsis clip.
+   Existing status gutters leave room for both the arrow and the soft halo. */
+.turn-seat .player-name{filter:drop-shadow(0 0 3px var(--gold))}
 .name-mark>.give-target{background:transparent!important;color:inherit;border:0!important;box-shadow:none!important;text-decoration:none;transition:color 150ms ease!important}.name-mark>.give-target:disabled{opacity:1}.name-mark>.give-target[data-hovered=true]:not(:disabled),.name-mark>.give-target:focus-visible:not(:disabled){background:transparent!important;color:#394674;text-decoration:none}
 .card-grid>.card:active:not(:disabled){transform:translate3d(var(--slot-x),var(--slot-y),0)}
 
@@ -132,7 +135,7 @@ h2{font-family:'Dela Gothic One',cursive;font-weight:400}.results h2{font-size:c
 .table-actions{justify-content:flex-start}.personal-area{padding-inline:var(--outer-pad)}
 @media(max-width:699px){.center-table{margin-top:20px}}
 @media(min-width:700px){.lower-composition{transform:translateX(clamp(12px,1.4vw,22px))}}
-.name-mark .turn-triangle{position:absolute;right:calc(100% + 6px - .2em)}
+.name-mark .turn-triangle{position:absolute;right:calc(100% + 6px - max(.2em,4px))}
 .resizing .card-grid>.card{transition:none}
 .opponent .inspect-hand,.opponent .preparation{left:50%;translate:-50% 0}
 /* Compact grouped composition; public row coordinates animate without changing target identities. */
